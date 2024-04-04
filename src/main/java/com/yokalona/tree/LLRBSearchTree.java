@@ -1,18 +1,22 @@
 package com.yokalona.tree;
 
+import static com.yokalona.Validations.*;
+
 public class LLRBSearchTree<Key extends Comparable<Key>, Value> {
 
     private Node<Key, Value> root;
 
     public void
     insert(Key key, Value value) {
+        validateKey(key);
         if (root == null) root = new Node<>(key, value, Node.BLACK);
-        else root = Node.put(root, key, value);
+        else root = Node.insert(root, key, value);
         root.color = Node.BLACK;
     }
 
     public Value
     get(Key key) {
+        validateKey(key);
         return Node.get(root, key);
     }
 
@@ -80,74 +84,76 @@ public class LLRBSearchTree<Key extends Comparable<Key>, Value> {
         }
 
         private static <Key extends Comparable<Key>, Value> Node<Key, Value>
-        put(Node<Key, Value> node, Key key, Value value) {
-            assert key != null;
+        insert(Node<Key, Value> node, Key key, Value value) {
+            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
 
             if (node == null) return new Node<>(key, value, RED);
 
             final int comparison = key.compareTo(node.key);
-            if (comparison < 0) node.left = put(node.left, key, value);
-            else if (comparison > 0) node.right = put(node.right, key, value);
+            if (comparison < 0) node.left = insert(node.left, key, value);
+            else if (comparison > 0) node.right = insert(node.right, key, value);
             else node.value = value;
 
             return balance(node);
         }
 
         private static <Key extends Comparable<Key>, Value> Node<Key, Value>
-        balance(Node<Key, Value> node) {
-            if (red(node.right) && !red(node.left)) node = rotateLeft(node);
-            if (red(node.left) && red(node.left.left)) node = rotateRight(node);
-            if (red(node.right) && red(node.left)) flip(node);
+        balance(Node<Key, Value> root) {
+            assert root != null : ROOT_SHOULD_HAVE_NON_NULL_VALUE;
+
+            if (red(root.right) && !red(root.left)) root = rotateLeft(root);
+            if (red(root.left) && red(root.left.left)) root = rotateRight(root);
+            if (red(root.right) && red(root.left)) flip(root);
 
             // update ranking
-            node.size = 1 + size(node.left) + size(node.right);
+            root.size = 1 + size(root.left) + size(root.right);
 
-            return node;
+            return root;
         }
 
         private static <Key extends Comparable<Key>, Value> Node<Key, Value>
-        rotateLeft(Node<Key, Value> node) {
-            assert node != null;
-            assert red(node.right) && !red(node.left);
+        rotateLeft(Node<Key, Value> root) {
+            assert root != null : ROOT_SHOULD_HAVE_NON_NULL_VALUE;
+            assert red(root.right) && !red(root.left) : INCORRECT_COLORING;
 
-            final Node<Key, Value> right = node.right;
-            node.right = right.left;
-            right.left = node;
-            right.color = node.color;
-            node.color = RED;
-            right.size = node.size;
-            node.size = 1 + size(node.left) + size(node.right);
+            final Node<Key, Value> right = root.right;
+            root.right = right.left;
+            right.left = root;
+            right.color = root.color;
+            root.color = RED;
+            right.size = root.size;
+            root.size = 1 + size(root.left) + size(root.right);
             return right;
         }
 
         private static <Key extends Comparable<Key>, Value> Node<Key, Value>
-        rotateRight(Node<Key, Value> node) {
-            assert node != null;
-            assert red(node.left) && red(node.left.left);
+        rotateRight(Node<Key, Value> root) {
+            assert root != null : ROOT_SHOULD_HAVE_NON_NULL_VALUE;
+            assert red(root.left) && red(root.left.left) : INCORRECT_COLORING;
 
-            final Node<Key, Value> left = node.left;
-            node.left = left.right;
-            left.right = node;
-            left.color = node.color;
-            node.color = RED;
-            left.size = node.size;
-            node.size = 1 + size(node.left) + size(node.right);
+            final Node<Key, Value> left = root.left;
+            root.left = left.right;
+            left.right = root;
+            left.color = root.color;
+            root.color = RED;
+            left.size = root.size;
+            root.size = 1 + size(root.left) + size(root.right);
             return left;
         }
 
         private static void
-        flip(Node<?, ?> node) {
-            assert node != null;
-            assert red(node.left) && red(node.right);
+        flip(Node<?, ?> root) {
+            assert root != null : ROOT_SHOULD_HAVE_NON_NULL_VALUE;
+            assert red(root.left) && red(root.right) : INCORRECT_COLORING;
 
-            node.color = !node.color;
-            node.left.color = !node.left.color;
-            node.right.color = !node.right.color;
+            root.color = !root.color;
+            root.left.color = !root.left.color;
+            root.right.color = !root.right.color;
         }
 
         private static <Key extends Comparable<Key>, Value> Value
         get(Node<Key, Value> root, Key key) {
-            assert key != null;
+            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
 
             while (root != null) {
                 final int comparison = root.key.compareTo(key);
@@ -155,6 +161,7 @@ public class LLRBSearchTree<Key extends Comparable<Key>, Value> {
                 else if (comparison < 0) root = root.right;
                 else return root.value;
             }
+
             return null;
         }
 

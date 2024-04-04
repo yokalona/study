@@ -1,6 +1,8 @@
 package com.yokalona.geometry;
 
+import java.util.Arrays;
 import java.util.Objects;
+import java.util.Stack;
 
 public class IdPoint extends Point {
 
