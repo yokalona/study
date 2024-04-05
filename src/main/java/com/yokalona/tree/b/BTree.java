@@ -6,9 +6,6 @@ import java.util.*;
 
 import static com.yokalona.Validations.*;
 
-// TODO: Use SBBSTree/SkipList for children nodes
-// TODO: Should forbid non-unique keys
-// TODO: Prepare to concurrency rework
 public class BTree<Key extends Comparable<Key>, Value>
         implements Tree<Key, Value>, Iterable<Map<Key, Value>> {
     private static final String INDENT = "     ";
@@ -36,6 +33,7 @@ public class BTree<Key extends Comparable<Key>, Value>
     public boolean
     insert(final Key key, final Value value) {
         validateKey(key);
+        if (contains(key)) return false;
         final Node<Key, Value> inserted = root.insert(key, value, height);
         size++;
         if (inserted == null) return true;
@@ -83,9 +81,29 @@ public class BTree<Key extends Comparable<Key>, Value>
     @Override
     public void
     clear() {
-        root = new Node<>(capacity);
         size = 0;
         height = 0;
+        root = new Node<>(capacity);
+    }
+
+    public Entry<Key, Value>
+    min() {
+        if (root.size == 0) return null;
+        Node<Key, Value> node = root;
+        while (node.min().next != null) {
+            node = node.min().next;
+        }
+        return Entry.fromLeaf(node.min());
+    }
+
+    public Entry<Key, Value>
+    max() {
+        if (root.size == 0) return null;
+        Node<Key, Value> node = root;
+        while (node.max().next != null) {
+            node = node.max().next;
+        }
+        return Entry.fromLeaf(node.max());
     }
 
     @Override
@@ -114,14 +132,14 @@ public class BTree<Key extends Comparable<Key>, Value>
         nodes.offer(root);
         int height = 0;
         Key previous = null;
-        while (!nodes.isEmpty()) {
+        while (! nodes.isEmpty()) {
             int size = nodes.size();
-            for (int i = 0; i < size; i ++) {
+            for (int i = 0; i < size; i++) {
                 Node<Key, Value> node = nodes.poll();
                 if (node == null) throw new IllegalStateException("Node can not be null");
 
-                for (int child = 0; child < node.size(); child ++) {
-                    Leaf<Key, Value> leaf = node.children()[child];
+                for (int child = 0; child < node.size; child++) {
+                    Leaf<Key, Value> leaf = node.children[child];
                     if (height == height()) {
                         if (previous == null || previous.compareTo(leaf.key) <= 0) previous = leaf.key;
                         else throw new IllegalStateException("Order consistency violated");
@@ -131,23 +149,23 @@ public class BTree<Key extends Comparable<Key>, Value>
                     }
                 }
             }
-            height ++;
+            height++;
         }
     }
 
     void checkCapacityConstraint() {
         Queue<Node<?, ?>> nodes = new LinkedList<>();
         nodes.offer(root);
-        while (!nodes.isEmpty()) {
+        while (! nodes.isEmpty()) {
             int size = nodes.size();
-            for (int i = 0; i < size; i ++) {
+            for (int i = 0; i < size; i++) {
                 Node<?, ?> node = nodes.poll();
                 if (node == null) throw new IllegalStateException("Node can not be null");
                 else if (node.size >= capacity) throw new IllegalStateException(EXCEEDING_CAPACITY);
                 else if (node != root && node.size < capacity / 2) throw new IllegalStateException(EXCEEDING_CAPACITY);
                 else if (node.children.length > capacity) throw new IllegalStateException(EXCEEDING_CAPACITY);
 
-                for (Leaf<?, ?> leaf : node.children()) {
+                for (Leaf<?, ?> leaf : node.children) {
                     if (leaf != null && leaf.next() != null) {
                         nodes.add(leaf.next());
                     }
@@ -157,11 +175,11 @@ public class BTree<Key extends Comparable<Key>, Value>
     }
 
     public void check() {
-        checkCapacityConstraint();
         checkOrderConstraint();
+        checkCapacityConstraint();
     }
 
-    static class Node<Key extends Comparable<Key>, Value> {
+    private static class Node<Key extends Comparable<Key>, Value> {
         private final Leaf<Key, Value>[] children;
         private int size = 0;
 
@@ -171,6 +189,49 @@ public class BTree<Key extends Comparable<Key>, Value>
             assert capacity % 2 == 0 : CAPACITY_SHOULD_BE_EVEN;
 
             this.children = (Leaf<Key, Value>[]) new Leaf[capacity];
+        }
+
+        public Leaf<?, Value>
+        get(final Key key, final int height) {
+            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
+            assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
+
+            if (height == 0) return getFromLeaf(key);
+            else return getFromNode(key, height);
+        }
+
+        public Node<Key, Value>
+        insert(final Key key, final Value value, final int height) {
+            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
+            assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
+
+            if (height == 0) insertLeaf(key, value);
+            else insertLeaf(key, value, height);
+            if (size < children.length) return null;
+            else return split();
+        }
+
+        public boolean
+        remove(final Node<Key, Value> parent, final int index, final Key key, final int height) {
+            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
+            assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
+
+            if (height == 0) return removeFromLeaf(parent, index, key);
+            else return removeFromNode(parent, index, key, height);
+        }
+
+        private boolean removeFromNode(Node<Key, Value> parent, int index, Key key, int height) {
+            int node = Math.max(search(key) - 1, 0);
+            if (node >= size) return false;
+            final boolean removed = children[node].next.remove(this, node, key, height - 1);
+            if (deficient()) balance(parent, index);
+            return removed;
+        }
+
+        private boolean removeFromLeaf(Node<Key, Value> parent, int index, Key key) {
+            final boolean removed = remove(key);
+            if (deficient()) balance(parent, index);
+            return removed;
         }
 
         public Leaf<Key, Value>
@@ -187,40 +248,31 @@ public class BTree<Key extends Comparable<Key>, Value>
             return children[size - 1];
         }
 
-        public void
-        insert(final Leaf<Key, Value> child) {
-            assert child != null : CHILD_SHOULD_HAVE_NON_NULL_VALUE;
-            assert size < children.length - 1 : EXCEEDING_CAPACITY;
+        public Leaf<Key, Value>
+        rank(int rank) {
+            assert rank >= 0 && rank < size : EXCEEDING_CAPACITY;
 
-            children[size++] = child;
+            return children[rank];
         }
 
-        public void
-        replace(final int position, final Leaf<Key, Value> child) {
-            assert child != null : CHILD_SHOULD_HAVE_NON_NULL_VALUE;
+        private Leaf<?, Value>
+        getFromLeaf(final Key key) {
+            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
 
-            children[position] = child;
+            final int child = search(key) - 1;
+            if (child >= size || child < 0) return null;
+            else if (children[child].key.compareTo(key) == 0) return children[child];
+            else return null;
         }
 
-        public Node<Key, Value>
-        insert(final Key key, final Value value, final int height) {
+        private Leaf<?, Value>
+        getFromNode(final Key key, final int height) {
             assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
             assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
 
-            if (height == 0) insertLeaf(key, value);
-            else insertLeaf(key, value, height);
-            if (size < children.length) return null;
-            else return split();
-        }
-
-        int
-        size() {
-            return size;
-        }
-
-        Leaf<Key, Value>[]
-        children() {
-            return children;
+            int node = Math.max(search(key) - 1, 0);
+            if (node >= size) return null;
+            return children[node].next.get(key, height - 1);
         }
 
         private void
@@ -249,6 +301,30 @@ public class BTree<Key extends Comparable<Key>, Value>
 
             makeSpace(child);
             children[child] = leaf;
+        }
+
+        private void
+        insert(final Leaf<Key, Value> child) {
+            assert child != null : CHILD_SHOULD_HAVE_NON_NULL_VALUE;
+            assert size < children.length - 1 : EXCEEDING_CAPACITY;
+
+            children[size++] = child;
+        }
+
+        private void
+        insert(final int position, final Leaf<Key, Value> child) {
+            assert child != null : CHILD_SHOULD_HAVE_NON_NULL_VALUE;
+            assert size < children.length - 1 : EXCEEDING_CAPACITY;
+
+            makeSpace(position);
+            replace(position, child);
+        }
+
+        private void
+        replace(final int position, final Leaf<Key, Value> child) {
+            assert child != null : CHILD_SHOULD_HAVE_NON_NULL_VALUE;
+
+            children[position] = child;
         }
 
         private void
@@ -292,53 +368,6 @@ public class BTree<Key extends Comparable<Key>, Value>
             return split;
         }
 
-        public Leaf<?, Value>
-        get(final Key key, final int height) {
-            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-            assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
-
-            if (height == 0) return getFromLeaf(key);
-            else return getFromNode(key, height);
-        }
-
-        private Leaf<?, Value>
-        getFromLeaf(final Key key) {
-            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-
-            final int child = search(key) - 1;
-            if (child >= size || child < 0) return null;
-            else if (children[child].key.compareTo(key) == 0) return children[child];
-            else return null;
-        }
-
-        private Leaf<?, Value>
-        getFromNode(final Key key, final int height) {
-            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-            assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
-
-            int node = Math.max(search(key) - 1, 0);
-            if (node >= size) return null;
-            return children[node].next.get(key, height - 1);
-        }
-
-        public boolean
-        remove(final Node<Key, Value> parent, final int index, final Key key, final int height) {
-            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-            assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
-
-            if (height == 0) {
-                final boolean removed = remove(key);
-                if (size < children.length / 2) balance(parent, index);
-                return removed;
-            } else {
-                int node = Math.max(search(key) - 1, 0);
-                if (node >= size) return false;
-                final boolean removed = children[node].next.remove(this, node, key, height - 1);
-                if (size < children.length / 2) balance(parent, index);
-                return removed;
-            }
-        }
-
         private int
         search(final Key key) {
             assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
@@ -367,24 +396,41 @@ public class BTree<Key extends Comparable<Key>, Value>
         balance(final Node<Key, Value> parent, final int index) {
             final Node<Key, Value> left = leftSibling(parent, index);
             final Node<Key, Value> right = rightSibling(parent, index);
-            if (right != null && right.size > children.length / 2) {
-                insert(right.min());
-                parent.replace(index + 1, Leaf.internal(right.children[1].key, right));
-                right.removeMin();
-            } else if (left != null && left.size > children.length / 2) {
-                makeSpace(0);
-                replace(0, left.max());
-                parent.replace(index, Leaf.internal(left.max().key, this));
-                left.removeMax();
-            } else if (left != null) {
-                if (size >= 0) System.arraycopy(children, 0, left.children, left.size, size);
-                left.size += size;
-                parent.remove(index);
-            } else if (right != null) {
-                if (right.size >= 0) System.arraycopy(right.children, 0, children, size, right.size);
-                size += right.size;
-                parent.remove(index + 1);
-            }
+            if (right != null && right.haveSpare()) rotateLeft(parent, index, right);
+            else if (left != null && left.haveSpare()) rotateRight(parent, index, left);
+            else if (left != null) mergeWith(left, parent, index);
+            else if (right != null) right.mergeWith(this, parent, index + 1);
+        }
+
+        private boolean
+        haveSpare() {
+            return size > children.length / 2;
+        }
+
+        private boolean
+        deficient() {
+            return size < children.length / 2;
+        }
+
+        private void
+        rotateLeft(Node<Key, Value> parent, int index, Node<Key, Value> right) {
+            insert(right.min());
+            parent.replace(index + 1, Leaf.internal(right.rank(1).key, right));
+            right.removeMin();
+        }
+
+        private void
+        rotateRight(Node<Key, Value> parent, int index, Node<Key, Value> left) {
+            insert(0, left.max());
+            parent.replace(index, Leaf.internal(left.max().key, this));
+            left.removeMax();
+        }
+
+        private void
+        mergeWith(Node<Key, Value> other, Node<Key, Value> parent, int index) {
+            if (size >= 0) System.arraycopy(children, 0, other.children, other.size, size);
+            other.size += size;
+            parent.remove(index);
         }
 
         private Node<Key, Value>
@@ -402,16 +448,15 @@ public class BTree<Key extends Comparable<Key>, Value>
         private Map<Key, Value>
         extract() {
             Map<Key, Value> map = new HashMap<>();
-            for (Leaf<Key, Value> child : children) {
-                if (child == null) break;
-                map.put(child.key, child.value);
+            for (int child = 0; child < size; child ++) {
+                map.put(children[child].key, children[child].value);
             }
             return map;
         }
 
     }
 
-    record Leaf<Key extends Comparable<Key>, Value>(Key key, Value value, Node<Key, Value> next) {
+    private record Leaf<Key extends Comparable<Key>, Value>(Key key, Value value, Node<Key, Value> next) {
 
         public static <Key extends Comparable<Key>, Value> Leaf<Key, Value>
         internal(Key key, Node<Key, Value> next) {
@@ -425,20 +470,27 @@ public class BTree<Key extends Comparable<Key>, Value>
 
     }
 
-    private record BlockIterator<Key extends Comparable<Key>, Value>(Iterator<Node<Key, Value>> underlying)
-            implements Iterator<Map<Key, Value>> {
+    private record BlockIterator<Key extends Comparable<Key>, Value>
+            (Iterator<Node<Key, Value>> underlying) implements Iterator<Map<Key, Value>> {
 
         @Override
-            public boolean hasNext() {
-                return underlying.hasNext();
-            }
-
-            @Override
-            public Map<Key, Value> next() {
-                Node<Key, Value> next = underlying.next();
-                return next.extract();
-            }
+        public boolean hasNext() {
+            return underlying.hasNext();
         }
+
+        @Override
+        public Map<Key, Value> next() {
+            Node<Key, Value> next = underlying.next();
+            return next.extract();
+        }
+    }
+
+    public record Entry<Key extends Comparable<Key>, Value>(Key key, Value value) {
+        private static <Key extends Comparable<Key>, Value> Entry<Key, Value>
+        fromLeaf(Leaf<Key, Value> leaf) {
+            return new Entry<>(leaf.key, leaf.value);
+        }
+    }
 
     public String toString() {
         return toString(root, height, "") + "\n";

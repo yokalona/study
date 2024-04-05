@@ -127,6 +127,30 @@ class BTreeTest {
     }
 
     @Test
+    public void testStats() {
+        Integer[] data = new Integer[10];
+        for (int testSize = 0; testSize < 10; testSize++)
+            data[testSize] = testSize;
+
+        BTree<Integer, Integer> bTree = new BTree<>(4);
+        assertNull(bTree.min());
+        assertNull(bTree.max());
+        for (int sample : data) bTree.insert(sample, sample);
+
+        assertEquals(0, bTree.min().key());
+        assertEquals(9, bTree.max().key());
+
+        bTree.remove(0);
+        assertEquals(1, bTree.min().key());
+        bTree.remove(9);
+        assertEquals(8, bTree.max().key());
+
+        bTree.clear();
+        assertNull(bTree.min());
+        assertNull(bTree.max());
+    }
+
+    @Test
     public void testPrint() {
         Integer[] data = new Integer[10];
         for (int testSize = 0; testSize < 10; testSize++)
@@ -189,7 +213,7 @@ class BTreeTest {
         }
         bTree.check();
         System.out.println("OK");
-        testSizeAndGrowthRate(bTree, capacity, parameters[TEST_SIZE] * 2);
+        testSizeAndGrowthRate(bTree, capacity, parameters[TEST_SIZE]);
         System.out.println();
     }
 
@@ -213,7 +237,7 @@ class BTreeTest {
             for (int sample : data) {
                 bTree.insert(sample, sample);
             }
-            testSizeAndGrowthRate(bTree, capacity, parameters[TEST_SIZE] * (repeat + 1));
+            testSizeAndGrowthRate(bTree, capacity, parameters[TEST_SIZE]);
 
             System.out.print("\tTesting consistency:\t\t");
             shuffle(data);
