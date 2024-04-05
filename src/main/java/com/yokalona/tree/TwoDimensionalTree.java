@@ -344,7 +344,7 @@ public class TwoDimensionalTree {
         toString(Node node) {
             final StringBuilder sb = new StringBuilder();
             traverseDFS(node, point -> {
-                sb.repeat("  ", point.depth);
+//                sb.repeat("  ", point.depth);
                 sb.append(point).append('\n');
             });
             return sb.toString();
