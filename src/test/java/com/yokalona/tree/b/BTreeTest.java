@@ -17,6 +17,8 @@ class BTreeTest {
     public static final int TEST_SIZE = 1;
     public static final int REPEATS = 2;
 
+    public static final Boolean VERBOSE = false;
+
     @ParameterizedTest
     @MethodSource("loadParameters")
     public void remove(int[] parameters) {
@@ -27,12 +29,13 @@ class BTreeTest {
             data[testSize] = testSize;
 
         for (int repeat = 0; repeat < parameters[REPEATS]; repeat ++) {
-            System.out.println("Repeat: " + repeat);
+            println("Repeat: " + repeat);
             BTree<Integer, Integer> bTree = new BTree<>(capacity);
             shuffle(data);
             printOrder("\tInsertion order: [%s]%n", data);
             for (int sample : data) {
                 bTree.insert(sample, sample);
+                bTree.check();
             }
 
             shuffle(data);
@@ -40,19 +43,19 @@ class BTreeTest {
             System.arraycopy(data, 0, remove, 0, remove.length);
 
             printOrder("\tRemoval order: [%s]%n", remove);
-            System.out.print("\tStarting removing data: ");
+            print("\tStarting removing data: ");
             for (int toRemove : remove) {
                 bTree.remove(toRemove);
                 assertNull(bTree.get(toRemove));
             }
             bTree.check();
-            System.out.println("OK");
+            println("OK");
             assertEquals(parameters[TEST_SIZE] - remove.length, bTree.size());
             testSizeAndGrowthRate(bTree, capacity, bTree.size());
 
             Arrays.sort(remove);
 
-            System.out.print("\tConsistency test: ");
+            print("\tConsistency test: ");
             for (int sample : data) {
                 if (Arrays.binarySearch(remove, sample) >= 0) {
                     assertNull(bTree.get(sample));
@@ -61,16 +64,16 @@ class BTreeTest {
                 }
             }
             bTree.check();
-            System.out.println("OK");
+            println("OK");
 
-            System.out.print("\tRemoving non existing keys: ");
+            print("\tRemoving non existing keys: ");
             for (int sample : data) {
                 int key = sample + parameters[TEST_SIZE] + 1;
                 assertFalse(bTree.contains(key));
                 bTree.remove(key);
             }
             bTree.check();
-            System.out.println("OK");
+            println("OK");
 
             for (int sample : data) {
                 bTree.remove(sample);
@@ -80,17 +83,29 @@ class BTreeTest {
         }
     }
 
+    private static void print(String s) {
+        if (VERBOSE) System.out.print(s);
+    }
+
+    private static void println(String repeat) {
+        if (VERBOSE) System.out.println(repeat);
+    }
+
+    private static void printf(String message, Object ... args) {
+        if (VERBOSE) System.out.printf(message, args);
+    }
+
     private static <Key extends Comparable<Key>> void printOrder(String message, Key[] data) {
         StringBuilder sb = new StringBuilder();
         sb.append(data[0]);
         for (int i = 1; i < Math.min(data.length, 1000); i ++) {
             sb.append(' ').append(data[i]);
         }
-        System.out.printf(message, sb);
+        printf(message, sb);
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {- 5, - 4, 0, 1, 3, 5, 999})
+    @ValueSource(ints = {- 5, - 4, 0, 1, 2, 3, 5, 999})
     public void testCapacityBadArguments(int capacity) {
         assertThrows(IllegalArgumentException.class, () -> new BTree<>(capacity));
     }
@@ -162,7 +177,7 @@ class BTreeTest {
             bTree.insert(sample, sample);
         }
         String print = bTree.toString();
-        System.out.println(print);
+        println(print);
 
         shuffle(data);
         for (int sample : data) {
@@ -180,7 +195,7 @@ class BTreeTest {
             data[testSize] = testSize;
         shuffle(data);
 
-        System.out.printf("Prepared dataset of size: %d, tree capacity: %d%n", data.length, capacity);
+        printf("Prepared dataset of size: %d, tree capacity: %d%n", data.length, capacity);
         printOrder("Insertion order: [%s]%n", data);
         BTree<Integer, Integer> bTree = new BTree<>(capacity);
         for (int sample : data) {
@@ -188,31 +203,31 @@ class BTreeTest {
         }
         testSizeAndGrowthRate(bTree, capacity, parameters[TEST_SIZE]);
 
-        System.out.print("\tTesting consistency:\t\t");
+        print("\tTesting consistency:\t\t");
         shuffle(data);
         for (int sample : data) {
             assertNotNull(bTree.get(sample), () -> "Consistency test failed, trace: " + trace(bTree, data));
             assertTrue(bTree.contains(sample));
         }
         bTree.check();
-        System.out.println("OK");
+        println("OK");
 
-        System.out.print("\tTesting excess data:\t\t");
+        print("\tTesting excess data:\t\t");
         for (int sample : data) {
             int key = sample + parameters[TEST_SIZE] + 1;
             assertNull(bTree.get(key));
             assertFalse(bTree.contains(key));
         }
         bTree.check();
-        System.out.println("OK");
+        println("OK");
 
-        System.out.print("\tTesting repeated insert:\t");
+        print("\tTesting repeated insert:\t");
         shuffle(data);
         for (int sample : data) {
             bTree.insert(sample, sample);
         }
         bTree.check();
-        System.out.println("OK");
+        println("OK");
         testSizeAndGrowthRate(bTree, capacity, parameters[TEST_SIZE]);
         System.out.println();
     }
@@ -227,24 +242,24 @@ class BTreeTest {
             data[testSize] = testSize;
         shuffle(data);
 
-        System.out.printf("Prepared dataset of size: %d, tree capacity: %d%n", data.length, capacity);
+        printf("Prepared dataset of size: %d, tree capacity: %d%n", data.length, capacity);
 
         BTree<Integer, Integer> bTree = new BTree<>(capacity);
 
         for (int repeat = 0; repeat < parameters[REPEATS]; repeat ++) {
-            System.out.printf("\n\tRepeated insert operations, iteration: %6d%n", repeat);
+            printf("\n\tRepeated insert operations, iteration: %6d%n", repeat);
             shuffle(data);
             for (int sample : data) {
                 bTree.insert(sample, sample);
             }
             testSizeAndGrowthRate(bTree, capacity, parameters[TEST_SIZE]);
 
-            System.out.print("\tTesting consistency:\t\t");
+            print("\tTesting consistency:\t\t");
             shuffle(data);
             for (int sample : data) {
                 assertNotNull(bTree.get(sample), () -> "Consistency test failed, trace: " + trace(bTree, data));
             }
-            System.out.println("OK");
+            println("OK");
         }
     }
 
@@ -256,11 +271,11 @@ class BTreeTest {
     }
 
     private void testSizeAndGrowthRate(BTree<?, ?> bTree, int capacity, int size) {
-        System.out.printf("\tSize: \t\t\t\t\t\t%d%n\tHeight: \t\t\t\t\t%d%n", bTree.size(), bTree.height());
+        printf("\tSize: \t\t\t\t\t\t%d%n\tHeight: \t\t\t\t\t%d%n", bTree.size(), bTree.height());
         assertEquals(size, bTree.size());
         double lowerBound = Math.ceil(log(bTree.size() + 1, capacity)) - 1;
         double upperBound = Math.floor(log((bTree.size() + 1) / 2, capacity / 2));
-        System.out.printf("\tHeight is within borders:\t%.2f <= %d <= %.2f%n", lowerBound, bTree.height(), upperBound);
+        printf("\tHeight is within borders:\t%.2f <= %d <= %.2f%n", lowerBound, bTree.height(), upperBound);
         assertTrue(bTree.height() >= lowerBound
                 && bTree.height() <= upperBound);
     }
@@ -284,7 +299,8 @@ class BTreeTest {
                 {8, 10, 1000}, {8, 1000, 1000},
                 {10, 10, 1000}, {10, 1000, 1000},
                 {20, 10, 1000}, {20, 1000, 1000},
-                {100, 10, 1000}, {100, 1000, 1000}
+                {100, 10, 1000}, {100, 1000, 1000},
+                {16, 1000, 10_000}
         };
     }
 

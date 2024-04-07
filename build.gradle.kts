@@ -1,3 +1,5 @@
+import java.util.*
+
 plugins {
     id("java")
     id("me.champeau.jmh") version "0.7.2"
@@ -21,4 +23,11 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+jmh {
+    timeOnIteration = "1s"
+    resultFormat = "CSV"
+    warmup = "1s"
+    humanOutputFile = project.file("${project.buildDir}/reports/jmh/human-${UUID.randomUUID()}.txt")
 }
