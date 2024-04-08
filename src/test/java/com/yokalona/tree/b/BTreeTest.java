@@ -32,7 +32,6 @@ class BTreeTest {
             println("Repeat: " + repeat);
             BTree<Integer, Integer> bTree = new BTree<>(capacity);
             shuffle(data);
-//            data = new Integer[] {9, 4, 1, 0, 8, 3, 5, 2, 6, 7};
             printOrder("\tInsertion order: [%s]%n", data);
             for (int sample : data) {
                 bTree.insert(sample, sample);
@@ -43,12 +42,9 @@ class BTreeTest {
             Integer[] remove = new Integer[parameters[TEST_SIZE] / 2];
             System.arraycopy(data, 0, remove, 0, remove.length);
 
-//            remove = new Integer[] {7, 3, 4, 6, 5};
             printOrder("\tRemoval order: [%s]%n", remove);
             print("\tStarting removing data: ");
             for (int toRemove : remove) {
-//                System.out.println(bTree);
-//                System.out.println("Removing: " + toRemove);
                 bTree.remove(toRemove);
                 assertNull(bTree.get(toRemove));
             }
@@ -105,7 +101,7 @@ class BTreeTest {
         for (int i = 1; i < Math.min(data.length, 1000); i ++) {
             sb.append(' ').append(data[i]);
         }
-        printf(message, sb);
+        printf(message, sb.append("..."));
     }
 
     @ParameterizedTest
@@ -202,7 +198,6 @@ class BTreeTest {
         printf("Prepared dataset of size: %d, tree capacity: %d%n", data.length, capacity);
         printOrder("Insertion order: [%s]%n", data);
         BTree<Integer, Integer> bTree = new BTree<>(capacity);
-//        data = new Integer[] {2, 8, 5, 0, 7, 6, 9, 1, 4, 3};
         for (int sample : data) {
             assertFalse(bTree.contains(sample));
             bTree.insert(sample, sample);

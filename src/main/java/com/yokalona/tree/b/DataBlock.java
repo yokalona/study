@@ -158,7 +158,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
                 else if (comparison < 0) left = mid + 1;
                 else return mid;
             }
-            return -1;
+            return -(left + 1);
         }
 
         public int position(final Key key) {

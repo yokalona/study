@@ -32,13 +32,14 @@ public class BTree<Key extends Comparable<Key>, Value>
     @Override
     public boolean
     insert(final Key key, final Value value) {
-        if (contains(key)) return false;
-        final Node<Key, Value> inserted = root.insert(key, value, height);
+        validateKey(key);
+        Node.InsertResult<Key, Value> result = root.insert(key, value, height);
+        if (!result.inserted) return false;
         size++;
-        if (inserted == null) return true;
+        if (result.node == null) return true;
         final Node<Key, Value> split = new Node<>(capacity);
         split.children.insert(Leaf.internal(root.min().key, root));
-        split.children.insert(Leaf.internal(inserted.min().key, inserted));
+        split.children.insert(Leaf.internal(result.node.min().key, result.node));
         root = split;
         height++;
         return true;
@@ -102,7 +103,8 @@ public class BTree<Key extends Comparable<Key>, Value>
     }
 
     @Override
-    public Iterator<Map<Key, Value>> iterator() {
+    public Iterator<Map<Key, Value>>
+    iterator() {
         int height = height();
         Queue<Node<Key, Value>> nodes = new LinkedList<>();
         if (root == null) return Collections.emptyIterator();
@@ -123,11 +125,13 @@ public class BTree<Key extends Comparable<Key>, Value>
         return new BlockIterator<>(nodes.iterator());
     }
 
-    void check() {
+    void
+    check() {
         assert isBTree();
     }
 
-    private boolean isBTree() {
+    private boolean
+    isBTree() {
         Queue<Node<?, ?>> nodes = new LinkedList<>();
         nodes.offer(root);
         int height = 0;
@@ -174,15 +178,16 @@ public class BTree<Key extends Comparable<Key>, Value>
             else return getFromNode(key, height);
         }
 
-        public Node<Key, Value>
+        public InsertResult<Key, Value>
         insert(final Key key, final Value value, final int height) {
             assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
             assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
 
-            if (height == 0) insertLeaf(key, value);
-            else insertNode(key, value, height);
-            if (children.size() < children.length()) return null;
-            else return split();
+            InsertResult<Key, Value> result;
+            if (height == 0) result = insertLeaf(key, value);
+            else result = insertNode(key, value, height);
+            if (result.inserted && children.size() >= children.length()) return result.node(split());
+            else return result.node(null);
         }
 
         public boolean
@@ -194,7 +199,8 @@ public class BTree<Key extends Comparable<Key>, Value>
             else return removeFromNode(parent, index, key, height);
         }
 
-        private boolean removeFromNode(Node<Key, Value> parent, int index, Key key, int height) {
+        private boolean
+        removeFromNode(Node<Key, Value> parent, int index, Key key, int height) {
             int node = children.find.greaterThan(key) - 1;
             if (node >= children.size()) return false;
             final boolean removed = children.get(node).next.remove(this, node, key, height - 1);
@@ -202,7 +208,8 @@ public class BTree<Key extends Comparable<Key>, Value>
             return removed;
         }
 
-        private boolean removeFromLeaf(Node<Key, Value> parent, int index, Key key) {
+        private boolean
+        removeFromLeaf(Node<Key, Value> parent, int index, Key key) {
             final boolean removed = remove(key);
             if (deficient()) balance(parent, index);
             return removed;
@@ -247,26 +254,47 @@ public class BTree<Key extends Comparable<Key>, Value>
             return children.get(node).next.get(key, height - 1);
         }
 
-        private void
+        private InsertResult<Key, Value>
         insertLeaf(final Key key, final Value value) {
             assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
 
-            int child = children.find.position(key);
-            if (child < 0) child *= -1;
-            children.insert(child, Leaf.external(key, value));
+            int child = children.find.equal(key);
+            if (child < 0) {
+                children.insert(-child - 1, Leaf.external(key, value));
+                return new InsertResult<>(true);
+            } else {
+                children.replace(child, Leaf.external(key, value));
+                return new InsertResult<>(false);
+            }
         }
 
-        private void
+        private InsertResult<Key, Value>
         insertNode(final Key key, final Value value, final int height) {
             assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
             assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
 
-            int node = children.find.lessThan(key);
+            int node = children.find.greaterThan(key) - 1;
             if (node < 0) node = 0;
-            final Node<Key, Value> inserted = children.get(node).next.insert(key, value, height - 1);
-            if (inserted != null) {
+            final InsertResult<Key, Value> result = children.get(node).next.insert(key, value, height - 1);
+            if (result.inserted && result.node != null) {
                 children.replace(node, Leaf.internal(children.get(node).next.min().key, children.get(node).next));
-                children.insert(node + 1, Leaf.internal(inserted.min().key, inserted));
+                children.insert(node + 1, Leaf.internal(result.node.min().key, result.node));
+            }
+            return result.node(null);
+        }
+
+        static class InsertResult<Key extends Comparable<Key>, Value> {
+            private final boolean inserted;
+            private Node<Key, Value> node;
+
+            private InsertResult(boolean inserted) {
+                this.inserted = inserted;
+            }
+
+            private InsertResult<Key, Value>
+            node(Node<Key, Value> node) {
+                this.node = node;
+                return this;
             }
         }
 
@@ -379,12 +407,14 @@ public class BTree<Key extends Comparable<Key>, Value>
             (Iterator<Node<Key, Value>> underlying) implements Iterator<Map<Key, Value>> {
 
         @Override
-        public boolean hasNext() {
+        public boolean
+        hasNext() {
             return underlying.hasNext();
         }
 
         @Override
-        public Map<Key, Value> next() {
+        public Map<Key, Value>
+        next() {
             Node<Key, Value> next = underlying.next();
             return next.extract();
         }
@@ -398,18 +428,21 @@ public class BTree<Key extends Comparable<Key>, Value>
         }
     }
 
-    public String toString() {
+    public String
+    toString() {
         return toString(root, height, "") + "\n";
     }
 
-    private String toString(Node<?, ?> node, int height, String indent) {
+    private String
+    toString(Node<?, ?> node, int height, String indent) {
         StringBuilder sb = new StringBuilder();
         if (height == 0) printLeaf(node, indent, sb, node.children);
         else printNode(node, height, indent, sb, node.children);
         return sb.toString();
     }
 
-    private void printNode(Node<?, ?> node, int height, String indent, StringBuilder sb, DataBlock<?, ? extends Leaf<?, ?>> children) {
+    private void
+    printNode(Node<?, ?> node, int height, String indent, StringBuilder sb, DataBlock<?, ? extends Leaf<?, ?>> children) {
         for (int child = 0; child < node.children.size(); child++) {
             if (child > 0 || node.children.size() == 1) sb.append(indent)
                     .append("(").append(children.get(child).key()).append(")\n");
@@ -417,7 +450,8 @@ public class BTree<Key extends Comparable<Key>, Value>
         }
     }
 
-    private static void printLeaf(Node<?, ?> node, String indent, StringBuilder sb, DataBlock<?, ? extends Leaf<?, ?>> children) {
+    private static void
+    printLeaf(Node<?, ?> node, String indent, StringBuilder sb, DataBlock<?, ? extends Leaf<?, ?>> children) {
         for (int child = 0; child < node.children.size(); child++) {
             sb.append(indent)
                     .append(children.get(child).key()).append(" ").append(children.get(child).value()).append("\n");
