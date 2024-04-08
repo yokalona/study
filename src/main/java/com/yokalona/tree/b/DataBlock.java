@@ -8,7 +8,7 @@ import java.util.function.Supplier;
 
 import static com.yokalona.Validations.KEY_SHOULD_HAVE_NON_NULL_VALUE;
 
-public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? extends Key>>
+public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extends Key>>
         implements Iterable<Data> {
     private final Data[] array;
     private int size;
@@ -217,6 +217,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
         public void unload() {
             this.loaded = false;
             Ignore.that(array);
+            Arrays.fill(array, null);
         }
 
     }

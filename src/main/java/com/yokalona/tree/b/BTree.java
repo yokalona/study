@@ -425,11 +425,10 @@ public class BTree<Key extends Comparable<Key>, Value>
                 return null;
             }
         }
-
     }
 
     private record Leaf<Key extends Comparable<Key>, Value>(Key key, Value value, Node<Key, Value> next)
-            implements WithKey<Key> {
+            implements HasKey<Key>, HasValue<Value> {
 
         public static <Key extends Comparable<Key>, Value> Leaf<Key, Value>
         internal(Key key, Node<Key, Value> next) {
@@ -461,7 +460,7 @@ public class BTree<Key extends Comparable<Key>, Value>
     }
 
     public record Entry<Key extends Comparable<Key>, Value>
-            (Key key, Value value) implements WithKey<Key> {
+            (Key key, Value value) implements HasKey<Key> {
         private static <Key extends Comparable<Key>, Value> Entry<Key, Value>
         fromLeaf(Leaf<Key, Value> leaf) {
             return new Entry<>(leaf.key, leaf.value);

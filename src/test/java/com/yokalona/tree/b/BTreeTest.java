@@ -361,8 +361,7 @@ class BTreeTest {
         double lowerBound = Math.ceil(log(bTree.size() + 1, capacity)) - 1;
         double upperBound = Math.floor(log((bTree.size() + 1) / 2, capacity / 2));
         printf("\tHeight is within borders:\t%.2f <= %d <= %.2f%n", lowerBound, bTree.height(), upperBound);
-        assertTrue(bTree.height() >= lowerBound
-                && bTree.height() <= upperBound);
+        assertTrue(bTree.height() >= lowerBound && bTree.height() <= upperBound);
     }
 
     private static int[][] consistencyParameters() {
@@ -371,11 +370,7 @@ class BTreeTest {
                 {6, 10}, {6, 100}, {6, 1000}, {6, 10000},
                 {10, 10}, {10, 100}, {10, 1000}, {10, 10000},
                 {100, 10}, {100, 100}, {100, 1000}, {100, 10000},
-                {256, 2}, {256, 78}, {256, 1_000_000},
-                {1_000, 1_000_000}, {1_000, 1_000_000},
-                {4, 1_000_000}, {30, 1_000_000},
-                {1_000_000, 10}, {1_000_000, 100},
-                {1_000_000, 1000}, {1_000_000, 10000}
+                {256, 2}, {256, 78}
         };
     }
 

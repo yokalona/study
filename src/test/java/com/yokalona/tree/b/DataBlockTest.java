@@ -42,7 +42,7 @@ class DataBlockTest {
 
     }
 
-    private record Datapoint(Integer key) implements WithKey<Integer> {
+    private record Datapoint(Integer key) implements HasKey<Integer> {
 
     }
 
