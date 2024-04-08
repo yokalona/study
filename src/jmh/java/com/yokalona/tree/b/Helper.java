@@ -10,6 +10,9 @@ public class Helper {
         return data[RANDOM.nextInt(data.length)];
     }
 
+    public static Integer randomNumber() {
+        return RANDOM.nextInt();
+    }
 
     public static Integer[] formSample(int sampleSize) {
         Integer[] data = new Integer[sampleSize];

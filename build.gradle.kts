@@ -24,3 +24,7 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
+
+jmh {
+    fork = 2
+}
