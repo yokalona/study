@@ -35,7 +35,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
     insert(Data value) {
         assert value != null : "Null values are not permitted";
 
-        array[size ++] = value;
+        array[size++] = value;
         assert check();
     }
 
@@ -52,8 +52,8 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
 
     public void
     remove(int index) {
-        System.arraycopy(array, index + 1, array, index, size - index);
-        array[-- size] = null;
+        System.arraycopy(array, index + 1, array, index, size - index - 1);
+        array[--size] = null;
 
         assert check();
     }
@@ -121,8 +121,8 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
     }
 
     boolean check() {
-//        checkConsistency();
-//        assert isOrdered();
+        checkConsistency();
+        assert isOrdered();
         return true;
     }
 
@@ -130,15 +130,15 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
     checkConsistency() {
         assert size >= 0;
         assert size <= array.length;
-        for (int point = 0; point < size; point ++) assert array[point] != null;
-        for (int point = size; point < array.length; point ++) assert array[point] == null;
+        for (int point = 0; point < size; point++) assert array[point] != null;
+        for (int point = size; point < array.length; point++) assert array[point] == null;
     }
 
     @SuppressWarnings("unchecked")
     boolean
     isOrdered() {
         Key previous = null;
-        for (int point = 0; point < size; point ++) {
+        for (int point = 0; point < size; point++) {
             if (previous == null || array[point].key().compareTo(previous) > 0) previous = array[point].key();
             else return false;
         }
@@ -146,21 +146,45 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
     }
 
     class Find {
+
         public int equal(final Key key) {
             assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
 
-            int left = 0, right = size;
-            while (left < right) {
+            int left = 0, right = size - 1;
+            while (left <= right) {
                 int mid = left + (right - left) / 2;
                 int comparison = array[mid].key().compareTo(key);
-                if (comparison > 0) right = mid;
-                else left = mid + 1;
+                if (comparison > 0) right = mid - 1;
+                else if (comparison < 0) left = mid + 1;
+                else return mid;
             }
-            return left;
+            return -1;
+        }
+
+        public int position(final Key key) {
+            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
+
+            int left = 0, right = size - 1;
+            while (left <= right) {
+                int mid = left + (right - left) / 2;
+                int comparison = array[mid].key().compareTo(key);
+                if (comparison > 0) right = mid - 1;
+                else if (comparison < 0) left = mid + 1;
+                else return mid;
+            }
+            return -left;
         }
 
         public int lessThan(final Key key) {
-            return equal(key) - 1;
+            int position = position(key);
+            if (position >= 0) return position - 1;
+            else return (position * -1) - 1;
+        }
+
+        public int greaterThan(final Key key) {
+            int position = position(key);
+            if (position >= 0) return position + 1;
+            else return position * -1;
         }
     }
 }

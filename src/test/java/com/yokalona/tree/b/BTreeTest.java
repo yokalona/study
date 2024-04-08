@@ -32,6 +32,7 @@ class BTreeTest {
             println("Repeat: " + repeat);
             BTree<Integer, Integer> bTree = new BTree<>(capacity);
             shuffle(data);
+//            data = new Integer[] {9, 4, 1, 0, 8, 3, 5, 2, 6, 7};
             printOrder("\tInsertion order: [%s]%n", data);
             for (int sample : data) {
                 bTree.insert(sample, sample);
@@ -42,9 +43,12 @@ class BTreeTest {
             Integer[] remove = new Integer[parameters[TEST_SIZE] / 2];
             System.arraycopy(data, 0, remove, 0, remove.length);
 
+//            remove = new Integer[] {7, 3, 4, 6, 5};
             printOrder("\tRemoval order: [%s]%n", remove);
             print("\tStarting removing data: ");
             for (int toRemove : remove) {
+//                System.out.println(bTree);
+//                System.out.println("Removing: " + toRemove);
                 bTree.remove(toRemove);
                 assertNull(bTree.get(toRemove));
             }
@@ -198,7 +202,9 @@ class BTreeTest {
         printf("Prepared dataset of size: %d, tree capacity: %d%n", data.length, capacity);
         printOrder("Insertion order: [%s]%n", data);
         BTree<Integer, Integer> bTree = new BTree<>(capacity);
+//        data = new Integer[] {2, 8, 5, 0, 7, 6, 9, 1, 4, 3};
         for (int sample : data) {
+            assertFalse(bTree.contains(sample));
             bTree.insert(sample, sample);
         }
         testSizeAndGrowthRate(bTree, capacity, parameters[TEST_SIZE]);
@@ -206,7 +212,7 @@ class BTreeTest {
         print("\tTesting consistency:\t\t");
         shuffle(data);
         for (int sample : data) {
-            assertNotNull(bTree.get(sample), () -> "Consistency test failed, trace: " + trace(bTree, data));
+            assertNotNull(bTree.get(sample), () -> "Consistency test failed, trace: " + trace(bTree, /*data*/ null));
             assertTrue(bTree.contains(sample));
         }
         bTree.check();
@@ -289,7 +295,8 @@ class BTreeTest {
                 {256, 2}, {256, 78}, {256, 1_000_000},
                 {1_000, 1_000_000}, {1_000, 1_000_000},
                 {4, 1_000_000}, {30, 1_000_000},
-                {1_000_000, 10}, {1_000_000, 100}, {1_000_000, 1000}, {1_000_000, 10000}};
+                {1_000_000, 10}, {1_000_000, 100}, {1_000_000, 1000}, {1_000_000, 10000}
+        };
     }
 
     private static int[][] loadParameters() {
