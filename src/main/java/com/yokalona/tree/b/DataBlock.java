@@ -13,6 +13,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
     private final Data[] array;
     private int size;
     final Find find = new Find();
+    final Loader loader = new Loader();
 
     public DataBlock(Supplier<? extends Data[]> supplier) {
         this.array = supplier.get();
@@ -20,6 +21,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
 
     public Data
     get(int index) {
+        if (!loader.loaded) loader.load();
         return array[index];
     }
 
@@ -27,6 +29,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
     replace(int index, Data value) {
         assert value != null : "Null values are not permitted";
 
+        if (!loader.loaded) loader.load();
         this.array[index] = value;
         assert check();
     }
@@ -35,6 +38,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
     insert(Data value) {
         assert value != null : "Null values are not permitted";
 
+        if (!loader.loaded) loader.load();
         array[size++] = value;
         assert check();
     }
@@ -43,6 +47,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
     insert(int index, Data value) {
         assert value != null : "Null values are not permitted";
 
+        if (!loader.loaded) loader.load();
         System.arraycopy(array, index, array, index + 1, size - index);
         array[index] = value;
         size++;
@@ -52,6 +57,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
 
     public void
     remove(int index) {
+        if (!loader.loaded) loader.load();
         System.arraycopy(array, index + 1, array, index, size - index - 1);
         array[--size] = null;
 
@@ -60,6 +66,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
 
     private void
     copyTo(DataBlock<Key, Data> other, int from, int to, int length) {
+        if (!loader.loaded) loader.load();
         System.arraycopy(array, from, other.array, to, length);
         other.size += length;
 
@@ -69,6 +76,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
 
     public void
     splitWith(DataBlock<Key, Data> other) {
+        if (!loader.loaded) loader.load();
         copyTo(other, array.length / 2, 0, array.length / 2);
         remove(array.length / 2, array.length);
 
@@ -78,6 +86,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
 
     public void
     mergeWith(DataBlock<Key, Data> other) {
+        if (!loader.loaded) loader.load();
         copyTo(other, 0, other.size, size);
 
         assert check();
@@ -86,6 +95,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
 
     public void
     remove(int from, int to) {
+        if (!loader.loaded) loader.load();
         Arrays.fill(array, from, to, null);
         size -= to - from;
 
@@ -94,6 +104,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
 
     public int
     length() {
+        if (!loader.loaded) loader.load();
         return this.array.length;
     }
 
@@ -105,22 +116,26 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
     @Override
     public Iterator<Data>
     iterator() {
+        if (!loader.loaded) loader.load();
         return Arrays.stream(this.array, 0, size).iterator();
     }
 
     @Override
     public void
     forEach(Consumer<? super Data> action) {
+        if (!loader.loaded) loader.load();
         Iterable.super.forEach(action);
     }
 
     @Override
     public Spliterator<Data>
     spliterator() {
+        if (!loader.loaded) loader.load();
         return Arrays.spliterator(array);
     }
 
     boolean check() {
+        if (!loader.loaded) loader.load();
         checkConsistency();
         assert isOrdered();
         return true;
@@ -161,6 +176,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
             return -(left + 1);
         }
 
+        // TODO: solve
         public int position(final Key key) {
             assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
 
@@ -186,5 +202,26 @@ public class DataBlock<Key extends Comparable<Key>, Data extends WithKey<? exten
             if (position >= 0) return position + 1;
             else return position * -1;
         }
+    }
+
+     class Loader {
+
+        private boolean loaded = false;
+
+        private void load() {
+            // do nothing for now
+            this.loaded = true;
+            Ignore.that(array);
+        }
+
+        public void unload() {
+            this.loaded = false;
+            Ignore.that(array);
+        }
+
+    }
+
+    private static class Ignore {
+        static void that(Object ignored) {}
     }
 }

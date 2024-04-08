@@ -18,6 +18,7 @@ class BTreeTest {
     public static final int REPEATS = 2;
 
     public static final Boolean VERBOSE = false;
+    public static final Random RANDOM = new Random();
 
     @ParameterizedTest
     @MethodSource("loadParameters")
@@ -28,7 +29,7 @@ class BTreeTest {
         for (int testSize = 0; testSize < parameters[TEST_SIZE]; testSize++)
             data[testSize] = testSize;
 
-        for (int repeat = 0; repeat < parameters[REPEATS]; repeat ++) {
+        for (int repeat = 0; repeat < parameters[REPEATS]; repeat++) {
             println("Repeat: " + repeat);
             BTree<Integer, Integer> bTree = new BTree<>(capacity);
             shuffle(data);
@@ -91,21 +92,21 @@ class BTreeTest {
         if (VERBOSE) System.out.println(repeat);
     }
 
-    private static void printf(String message, Object ... args) {
+    private static void printf(String message, Object... args) {
         if (VERBOSE) System.out.printf(message, args);
     }
 
     private static <Key extends Comparable<Key>> void printOrder(String message, Key[] data) {
         StringBuilder sb = new StringBuilder();
         sb.append(data[0]);
-        for (int i = 1; i < Math.min(data.length, 1000); i ++) {
+        for (int i = 1; i < Math.min(data.length, 1000); i++) {
             sb.append(' ').append(data[i]);
         }
         printf(message, sb.append("..."));
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {- 5, - 4, 0, 1, 2, 3, 5, 999})
+    @ValueSource(ints = {-5, -4, 0, 1, 2, 3, 5, 999})
     public void testCapacityBadArguments(int capacity) {
         assertThrows(IllegalArgumentException.class, () -> new BTree<>(capacity));
     }
@@ -128,7 +129,7 @@ class BTreeTest {
         for (int sample : data) {
             bTree.insert(sample, sample);
         }
-        int [][] blocks = new int[][] {{0, 1, 2, 3}, {4, 5, 6, 7, 8, 9}};
+        int[][] blocks = new int[][]{{0, 1, 2, 3}, {4, 5, 6, 7, 8, 9}};
         Iterator<Map<Integer, Integer>> iterator = bTree.iterator();
         int current = 0;
         while (iterator.hasNext()) {
@@ -138,6 +139,89 @@ class BTreeTest {
                 assertTrue(next.containsKey(b));
             }
             current++;
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("loadParameters")
+    public void testReplace(int[] parameters) {
+        int capacity = parameters[CAPACITY];
+
+        Integer[] data = new Integer[parameters[TEST_SIZE]];
+        for (int testSize = 0; testSize < parameters[TEST_SIZE]; testSize++)
+            data[testSize] = testSize;
+        shuffle(data);
+
+        BTree<Integer, Integer> bTree = new BTree<>(capacity);
+        TreeMap<Integer, Integer> controlGroup = new TreeMap<>();
+
+        for (int sample : data) {
+            bTree.insert(sample, sample);
+            controlGroup.put(sample, sample);
+        }
+
+        int repeats = parameters[REPEATS];
+        for (int repeat = 0; repeat < repeats; repeat++) {
+            int key = RANDOM.nextInt(data.length);
+            int value = RANDOM.nextInt(data.length);
+            bTree.insert(key, value);
+            controlGroup.put(key, value);
+        }
+
+        assertEquals(controlGroup.size(), bTree.size());
+        for (Map.Entry<Integer, Integer> entry : controlGroup.entrySet()) {
+            assertEquals(entry.getValue(), bTree.get(entry.getKey()));
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("rabbitAndTheHat")
+    public void testRabbitAndTheHat(int[] parameters) {
+        int capacity = parameters[CAPACITY];
+
+        Integer[] data = new Integer[parameters[TEST_SIZE]];
+        for (int testSize = 0; testSize < parameters[TEST_SIZE]; testSize++)
+            data[testSize] = testSize;
+        shuffle(data);
+
+        BTree<Integer, Integer> bTree = new BTree<>(capacity);
+        TreeMap<Integer, Integer> controlGroup = new TreeMap<>();
+
+        for (int sample : data) {
+            bTree.insert(sample, sample);
+            controlGroup.put(sample, sample);
+        }
+
+        int repeats = parameters[REPEATS];
+        for (int repeat = 0; repeat < repeats; repeat++) {
+            int key = RANDOM.nextInt();
+            int value = RANDOM.nextInt();
+            int action = RANDOM.nextInt(4);
+            switch (action) {
+                case 0: {
+                    bTree.insert(key, value);
+                    controlGroup.put(key, value);
+                }
+                break;
+                case 1: {
+                    assertEquals(controlGroup.get(key), bTree.get(key));
+                }
+                break;
+                case 2: {
+                    assertEquals(controlGroup.containsKey(key), bTree.contains(key));
+                }
+                break;
+                case 3: {
+                    bTree.remove(key);
+                    controlGroup.remove(key);
+                }
+                break;
+            }
+        }
+
+        assertEquals(controlGroup.size(), bTree.size());
+        for (Map.Entry<Integer, Integer> entry : controlGroup.entrySet()) {
+            assertEquals(entry.getValue(), bTree.get(entry.getKey()));
         }
     }
 
@@ -247,7 +331,7 @@ class BTreeTest {
 
         BTree<Integer, Integer> bTree = new BTree<>(capacity);
 
-        for (int repeat = 0; repeat < parameters[REPEATS]; repeat ++) {
+        for (int repeat = 0; repeat < parameters[REPEATS]; repeat++) {
             printf("\n\tRepeated insert operations, iteration: %6d%n", repeat);
             shuffle(data);
             for (int sample : data) {
@@ -303,6 +387,18 @@ class BTreeTest {
                 {20, 10, 1000}, {20, 1000, 1000},
                 {100, 10, 1000}, {100, 1000, 1000},
                 {16, 1000, 10_000}
+        };
+    }
+
+    private static int[][] rabbitAndTheHat() {
+        return new int[][]{
+                {4, 100, 10000}, {4, 10000, 10000},
+                {6, 100, 10000}, {6, 10000, 10000},
+                {8, 100, 10000}, {8, 10000, 10000},
+                {10, 100, 10000}, {10, 10000, 10000},
+                {20, 100, 10000}, {20, 10000, 10000},
+                {100, 100, 10000}, {100, 10000, 10000},
+                {10, 100, 10000}, {1000, 10000, 10000}
         };
     }
 
