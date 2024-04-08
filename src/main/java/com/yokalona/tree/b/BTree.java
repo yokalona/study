@@ -2,9 +2,21 @@ package com.yokalona.tree.b;
 
 import com.yokalona.tree.Tree;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.Queue;
 
-import static com.yokalona.Validations.*;
+import static com.yokalona.Validations.CAPACITY_SHOULD_BE_EVEN;
+import static com.yokalona.Validations.CAPACITY_SHOULD_BE_GREATER_THAN_2;
+import static com.yokalona.Validations.EMPTY_NODE;
+import static com.yokalona.Validations.EXCEEDING_CAPACITY;
+import static com.yokalona.Validations.HEIGHT_CAN_NOT_BE_NEGATIVE;
+import static com.yokalona.Validations.KEY_SHOULD_HAVE_NON_NULL_VALUE;
+import static com.yokalona.Validations.validateCapacity;
+import static com.yokalona.Validations.validateKey;
 
 public class BTree<Key extends Comparable<Key>, Value>
         implements Tree<Key, Value>, Iterable<Map<Key, Value>> {

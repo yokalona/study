@@ -56,18 +56,4 @@ public class BTreeGetPerformanceTest {
         blackhole.consume(bTree.get(key));
     }
 
-    public static void main(String[] args) throws RunnerException {
-        Options options = new OptionsBuilder()
-                .include(BTreeGetPerformanceTest.class.getSimpleName())
-                .addProfiler(JavaFlightRecorderProfiler.class)
-                .addProfiler(StackProfiler.class)
-                .warmupIterations(5)
-                .measurementIterations(5)
-                .resultFormat(ResultFormatType.JSON)
-                .forks(2)
-                .build();
-
-        new Runner(options).run();
-    }
-
 }

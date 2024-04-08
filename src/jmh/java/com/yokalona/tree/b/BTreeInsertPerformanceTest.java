@@ -10,7 +10,6 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 import static com.yokalona.tree.b.Helper.formSample;
@@ -54,20 +53,6 @@ public class BTreeInsertPerformanceTest {
         BTree<Integer, Integer> bTree = executionPlan.bTree;
         Integer key = randomKey(data);
         blackhole.consume(bTree.insert(key, randomKey(data)));
-    }
-
-    public static void main(String[] args) throws RunnerException {
-        Options options = new OptionsBuilder()
-                .include(BTreeInsertPerformanceTest.class.getSimpleName())
-                .addProfiler(JavaFlightRecorderProfiler.class)
-                .addProfiler(StackProfiler.class)
-                .warmupIterations(5)
-                .measurementIterations(5)
-                .resultFormat(ResultFormatType.JSON)
-                .forks(2)
-                .build();
-
-        new Runner(options).run();
     }
 
 }
