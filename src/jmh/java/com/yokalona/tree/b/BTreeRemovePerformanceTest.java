@@ -45,7 +45,7 @@ public class BTreeRemovePerformanceTest {
     @Measurement(iterations = 50, batchSize = OPERATIONS)
     @OperationsPerInvocation(OPERATIONS)
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public void btree_insert_base(ExecutionPlan executionPlan, Blackhole blackhole) {
+    public void btree_remove_base(ExecutionPlan executionPlan, Blackhole blackhole) {
         BTree<Integer, Integer> bTree = executionPlan.bTree;
         Integer[] data = executionPlan.data;
         blackhole.consume(bTree.remove(data[executionPlan.key++]));
