@@ -28,7 +28,8 @@ public class ComparisonCountProfiler implements InternalProfiler {
     }
 
     @Override
-    public String getDescription() {
+    public String
+    getDescription() {
         return "Counts the amount of 'compareOf' invocations on a Key";
     }
 

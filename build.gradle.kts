@@ -27,6 +27,10 @@ tasks.test {
 
 jmh {
     fork = 2
+    warmupIterations = 1
+    timeOnIteration = "1s"
+    iterations = 1
+    profilers.add("com.yokalona.tree.b.ComparisonCountProfiler")
     resultFormat = "JSON"
     resultsFile = project.file("${project.layout.buildDirectory.get().asFile.name}/benchmarks/output.json")
 }
