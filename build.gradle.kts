@@ -26,6 +26,12 @@ tasks.test {
 }
 
 jmh {
+    timeOnIteration = "1s"
+    iterations = 1
+    warmupIterations = 1
+    warmup = "1s"
+    warmupForks = 1
+
     fork = 2
     profilers.add("com.yokalona.tree.b.ComparisonCountProfiler")
     resultFormat = "JSON"

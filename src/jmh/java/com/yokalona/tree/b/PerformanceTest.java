@@ -12,8 +12,6 @@ public class PerformanceTest {
     public static void main(String[] args) throws RunnerException {
         Options options = new OptionsBuilder()
                 .forks(1)
-                .warmupIterations(1)
-                .measurementIterations(1)
                 .resultFormat(ResultFormatType.JSON)
                 .result("benchmarks/output.json")
                 .addProfiler(ComparisonCountProfiler.class)
