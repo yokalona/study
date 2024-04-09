@@ -15,7 +15,7 @@ public class PerformanceTest {
                 .resultFormat(ResultFormatType.JSON)
                 .result("benchmarks/output.json")
                 .addProfiler(JavaFlightRecorderProfiler.class, "dir=jfr")
-//                .include(BTreeGetPerformanceTest.class.getSimpleName())
+                .include(BTreeGetPerformanceTest.class.getSimpleName())
                 .include(BTreeInsertPerformanceTest.class.getSimpleName())
                 .include(BTreeRemovePerformanceTest.class.getSimpleName())
                 .build();
