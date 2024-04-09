@@ -41,10 +41,6 @@ public class BTreeInsertPerformanceTest {
             key = 0;
         }
 
-        @TearDown(Level.Iteration)
-        public void printStat() {
-            System.out.printf("\tComparisons count: %d%n", Helper.SpyKey.count());
-        }
     }
 
     @Benchmark
@@ -54,6 +50,7 @@ public class BTreeInsertPerformanceTest {
     @OperationsPerInvocation(OPERATIONS)
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     public void btree_insert_base(ExecutionPlan executionPlan, Blackhole blackhole) {
+        SpyKey.reset();
         BTree<SpyKey, Integer> bTree = executionPlan.bTree;
         SpyKey[] data = executionPlan.data;
         blackhole.consume(bTree.insert(data[executionPlan.key++], executionPlan.key));

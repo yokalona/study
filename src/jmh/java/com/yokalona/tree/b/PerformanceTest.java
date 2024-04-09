@@ -11,11 +11,14 @@ public class PerformanceTest {
 
     public static void main(String[] args) throws RunnerException {
         Options options = new OptionsBuilder()
-                .forks(2)
+                .forks(1)
+                .warmupIterations(1)
+                .measurementIterations(1)
                 .resultFormat(ResultFormatType.JSON)
                 .result("benchmarks/output.json")
-                .addProfiler(JavaFlightRecorderProfiler.class, "dir=jfr")
-                .include(BTreeGetPerformanceTest.class.getSimpleName())
+                .addProfiler(ComparisonCountProfiler.class)
+//                .addProfiler(JavaFlightRecorderProfiler.class, "dir=jfr")
+//                .include(BTreeGetPerformanceTest.class.getSimpleName())
                 .include(BTreeInsertPerformanceTest.class.getSimpleName())
                 .include(BTreeRemovePerformanceTest.class.getSimpleName())
                 .build();

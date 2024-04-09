@@ -35,11 +35,6 @@ public class BTreeRemovePerformanceTest {
             shuffle(data);
             key = 0;
         }
-
-        @TearDown(Level.Iteration)
-        public void printStat() {
-            System.out.printf("\tComparisons count: %d%n", Helper.SpyKey.count());
-        }
     }
 
     @Benchmark
@@ -49,6 +44,7 @@ public class BTreeRemovePerformanceTest {
     @OperationsPerInvocation(OPERATIONS)
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     public void btree_remove_base(ExecutionPlan executionPlan, Blackhole blackhole) {
+        SpyKey.reset();
         BTree<SpyKey, Integer> bTree = executionPlan.bTree;
         SpyKey[] data = executionPlan.data;
         blackhole.consume(bTree.remove(data[executionPlan.key++]));

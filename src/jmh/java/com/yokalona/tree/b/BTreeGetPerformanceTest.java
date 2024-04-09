@@ -13,10 +13,10 @@ public class BTreeGetPerformanceTest {
 
     @State(Scope.Benchmark)
     public static class ExecutionPlan {
-        @Param({"4", "32", "256", "2048", "16384", "131072", "262144"})
+        @Param({"4"/*, "32", "256", "2048", "16384", "131072", "262144"*/})
         public int capacity;
 
-        @Param({"10", "100", "1000", "10000", "100000", "1000000"})
+        @Param({"10", "100"/*, "1000", "10000", "100000", "1000000"*/})
         public int sampleSize;
 
         private Helper.SpyKey[] data;
@@ -32,21 +32,13 @@ public class BTreeGetPerformanceTest {
             }
         }
 
-        @Setup(Level.Iteration)
-        public void reset() {
-            Helper.SpyKey.reset();
-        }
-
-        @TearDown(Level.Iteration)
-        public void printStat() {
-            System.out.printf("\tComparisons count: %d%n", Helper.SpyKey.count());
-        }
     }
 
     @Benchmark
     @BenchmarkMode(Mode.AverageTime)
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     public void btree_get(ExecutionPlan executionPlan, Blackhole blackhole) {
+        Helper.SpyKey.reset();
         Helper.SpyKey[] data = executionPlan.data;
         BTree<Helper.SpyKey, Integer> bTree = executionPlan.bTree;
         Helper.SpyKey key = randomKey(data);
