@@ -24,14 +24,14 @@ public class BTreeInsertPerformanceTest {
         @Param({"4", "32", "256", "2048", "16384", "131072"})
         public int capacity;
         public int key = 0;
-        public Integer [] data;
+        public Integer[] data;
 
         public BTree<Integer, Integer> bTree;
 
         @Setup(Level.Trial)
         public void fill() {
             this.data = new Integer[OPERATIONS];
-            for (int i = 0; i < OPERATIONS; i ++) {
+            for (int i = 0; i < OPERATIONS; i++) {
                 data[i] = i;
             }
         }
@@ -46,14 +46,14 @@ public class BTreeInsertPerformanceTest {
 
     @Benchmark
     @BenchmarkMode(Mode.SingleShotTime)
-    @Warmup(iterations = 50, batchSize = OPERATIONS)
+    @Warmup(iterations = 100, batchSize = OPERATIONS)
     @Measurement(iterations = 50, batchSize = OPERATIONS)
     @OperationsPerInvocation(OPERATIONS)
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     public void btree_insert_base(ExecutionPlan executionPlan, Blackhole blackhole) {
         BTree<Integer, Integer> bTree = executionPlan.bTree;
         Integer[] data = executionPlan.data;
-        blackhole.consume(bTree.insert(data[executionPlan.key ++], executionPlan.key));
+        blackhole.consume(bTree.insert(data[executionPlan.key++], executionPlan.key));
     }
 
 }

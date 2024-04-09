@@ -11,7 +11,7 @@ public class PerformanceTest {
 
     public static void main(String[] args) throws RunnerException {
         Options options = new OptionsBuilder()
-                .forks(1)
+                .forks(2)
                 .resultFormat(ResultFormatType.JSON)
                 .result("benchmarks/output.json")
                 .addProfiler(JavaFlightRecorderProfiler.class, "dir=jfr")

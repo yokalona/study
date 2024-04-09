@@ -28,5 +28,5 @@ tasks.test {
 jmh {
     fork = 2
     resultFormat = "JSON"
-    resultsFile = project.file("${project.layout.buildDirectory}/benchmarks/output.json")
+    resultsFile = project.file("${project.layout.buildDirectory.get().asFile.name}/benchmarks/output.json")
 }

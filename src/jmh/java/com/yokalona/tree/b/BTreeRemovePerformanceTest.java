@@ -41,7 +41,7 @@ public class BTreeRemovePerformanceTest {
 
     @Benchmark
     @BenchmarkMode(Mode.SingleShotTime)
-    @Warmup(iterations = 50, batchSize = OPERATIONS)
+    @Warmup(iterations = 100, batchSize = OPERATIONS)
     @Measurement(iterations = 50, batchSize = OPERATIONS)
     @OperationsPerInvocation(OPERATIONS)
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
