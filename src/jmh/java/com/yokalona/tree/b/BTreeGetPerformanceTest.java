@@ -26,10 +26,10 @@ public class BTreeGetPerformanceTest {
 
     @State(Scope.Benchmark)
     public static class ExecutionPlan {
-        @Param({"4", "32", "256", "2048", "16384", "131072"})
+        @Param({"4"/*, "32", "256", "2048", "16384", "131072"*/})
         public int capacity;
 
-        @Param({"1000", "10000", "100000", "1000000"})
+        @Param({"1000"/*, "10000", "100000", "1000000"*/})
         public int sampleSize;
 
         private Integer[] data;

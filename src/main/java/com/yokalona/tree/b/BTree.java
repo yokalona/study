@@ -234,12 +234,19 @@ public class BTree<Key extends Comparable<Key>, Value>
         private class Get {
 
             public Leaf<?, Value>
-            by(final Key key, final int height) {
+            by(final Key key, int height) {
                 assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
                 assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
 
-                if (height == 0) return leaf(key);
-                else return node(key, height);
+                Node<Key, Value> next = Node.this;
+                while (height > 0) {
+                    int node = next.children.find.greaterThan(key) - 1;
+                    next = next.children.get(node).next;
+                    height --;
+                }
+                final int child = next.children.find.equal(key);
+                if (child < 0 || child >= next.children.size()) return null;
+                else return next.children.get(child);
             }
 
             public Leaf<Key, Value>
@@ -263,23 +270,6 @@ public class BTree<Key extends Comparable<Key>, Value>
                 return children.get(rank);
             }
 
-            private Leaf<?, Value>
-            leaf(final Key key) {
-                assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-
-                final int child = children.find.equal(key);
-                if (child < 0 || child >= children.size()) return null;
-                else return children.get(child);
-            }
-
-            private Leaf<?, Value>
-            node(final Key key, final int height) {
-                assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-                assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
-
-                int node = children.find.greaterThan(key) - 1;
-                return children.get(node).next.get.by(key, height - 1);
-            }
         }
 
         private class Insert {
