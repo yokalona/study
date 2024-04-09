@@ -6,7 +6,7 @@ public class Helper {
 
     public static final Random RANDOM = new Random();
 
-    public static Integer randomKey(Integer[] data) {
+    public static SpyKey randomKey(SpyKey[] data) {
         return data[RANDOM.nextInt(data.length)];
     }
 
@@ -14,10 +14,10 @@ public class Helper {
         return RANDOM.nextInt();
     }
 
-    public static Integer[] formSample(int sampleSize) {
-        Integer[] data = new Integer[sampleSize];
+    public static SpyKey[] formSample(int sampleSize) {
+        SpyKey[] data = new SpyKey[sampleSize];
         for (int testSize = 0; testSize < sampleSize; testSize++)
-            data[testSize] = testSize;
+            data[testSize] = new SpyKey(testSize);
         shuffle(data);
         return data;
     }
@@ -33,5 +33,22 @@ public class Helper {
         Type tmp = arr[left];
         arr[left] = arr[right];
         arr[right] = tmp;
+    }
+
+    public record SpyKey(Integer key) implements Comparable<SpyKey> {
+        private static long count = 0L;
+
+        public static long count() {
+            return count;
+        }
+
+        public static void reset() {
+            count = 0L;
+        }
+
+        public int compareTo(SpyKey anotherInteger) {
+            count++;
+            return key.compareTo(anotherInteger.key);
+        }
     }
 }

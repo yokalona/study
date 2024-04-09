@@ -17,25 +17,28 @@ public class BTreeRemovePerformanceTest {
         @Param({"4", "32", "256", "2048", "16384", "131072"})
         public int capacity;
         public int key = 0;
-        public Integer[] data;
+        public SpyKey[] data;
 
-        public BTree<Integer, Integer> bTree;
+        public BTree<SpyKey, Integer> bTree;
 
         @Setup(Level.Trial)
         public void fill() {
-            this.data = new Integer[OPERATIONS];
-            for (int i = 0; i < OPERATIONS; i++) {
-                data[i] = i;
-            }
+            this.data = Helper.formSample(OPERATIONS);
         }
 
         @Setup(Level.Iteration)
         public void prepareData() {
+            Helper.SpyKey.reset();
             this.bTree = new BTree<>(capacity);
             shuffle(data);
-            for (int sample : data) bTree.insert(sample, sample);
+            for (SpyKey sample : data) bTree.insert(sample, sample.key());
             shuffle(data);
             key = 0;
+        }
+
+        @TearDown(Level.Iteration)
+        public void printStat() {
+            System.out.printf("\tComparisons count: %d%n", Helper.SpyKey.count());
         }
     }
 
@@ -46,8 +49,8 @@ public class BTreeRemovePerformanceTest {
     @OperationsPerInvocation(OPERATIONS)
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     public void btree_remove_base(ExecutionPlan executionPlan, Blackhole blackhole) {
-        BTree<Integer, Integer> bTree = executionPlan.bTree;
-        Integer[] data = executionPlan.data;
+        BTree<SpyKey, Integer> bTree = executionPlan.bTree;
+        SpyKey[] data = executionPlan.data;
         blackhole.consume(bTree.remove(data[executionPlan.key++]));
     }
 }

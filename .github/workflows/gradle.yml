@@ -40,7 +40,7 @@ jobs:
     - name: JMH Benchmark comparison
       uses: kitlangton/jmh-benchmark-action@main
       with:
-        jmh-output-path: benchmarks/output.json
+        jmh-output-path: build/benchmarks/output.json
         github-token: ${{ secrets.GITHUB_TOKEN }}
 
   dependency-submission:
