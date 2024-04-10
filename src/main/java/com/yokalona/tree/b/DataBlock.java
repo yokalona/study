@@ -135,9 +135,9 @@ public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extend
     }
 
     boolean check() {
-//        if (!loader.loaded) loader.load();
-//        checkConsistency();
-//        assert isOrdered();
+        if (!loader.loaded) loader.load();
+        checkConsistency();
+        assert isOrdered();
         return true;
     }
 
