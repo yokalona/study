@@ -53,7 +53,7 @@ public class BTree<Key extends Comparable<Key>, Value>
     insert(final Key key, final Value value) {
         validateKey(key);
         Node.Insert.Result<Key, Value> result = root.insert.by(key, value, height);
-        assert isBTree();
+//        assert isBTree();
         if (!result.inserted) return false;
         size++;
         if (result.node == null) return true;

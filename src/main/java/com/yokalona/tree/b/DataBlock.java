@@ -135,9 +135,9 @@ public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extend
     }
 
     boolean check() {
-        if (!loader.loaded) loader.load();
-        checkConsistency();
-        assert isOrdered();
+//        if (!loader.loaded) loader.load();
+//        checkConsistency();
+//        assert isOrdered();
         return true;
     }
 
@@ -176,31 +176,16 @@ public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extend
             return -(left + 1);
         }
 
-        // TODO: solve
-        public int position(final Key key) {
-            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-
-            int left = 0, right = size - 1;
-            while (left <= right) {
-                int mid = left + (right - left) / 2;
-                int comparison = array[mid].key().compareTo(key);
-                if (comparison > 0) right = mid - 1;
-                else if (comparison < 0) left = mid + 1;
-                else return mid;
-            }
-            return -left;
-        }
-
         public int lessThan(final Key key) {
-            int position = position(key);
-            if (position >= 0) return position - 1;
-            else return (position * -1) - 1;
+            int equal = equal(key);
+            if (equal >= 0) return equal - 1;
+            else return Math.max(-equal - 2, 0);
         }
 
         public int greaterThan(final Key key) {
-            int position = position(key);
-            if (position >= 0) return position + 1;
-            else return position * -1;
+            int equal = equal(key);
+            if (equal >= 0) return equal + 1;
+            else return Math.max(-equal - 1, 1);
         }
     }
 

@@ -24,7 +24,7 @@ public class ComparisonCountProfiler implements InternalProfiler {
     @Override
     public Collection<? extends Result<ComparisonCountResult>>
     afterIteration(BenchmarkParams benchmarkParams, IterationParams iterationParams, IterationResult result) {
-        return List.of(new ComparisonCountResult(new SingletonStatistics(Helper.SpyKey.count())));
+        return List.of(new ComparisonCountResult(iterationParams.getCount(), new SingletonStatistics(Helper.SpyKey.count())));
     }
 
     @Override
@@ -35,32 +35,31 @@ public class ComparisonCountProfiler implements InternalProfiler {
 
     public static class ComparisonCountResult extends Result<ComparisonCountResult> {
 
-        public ComparisonCountResult(Statistics s) {
+        private final int count;
+
+        public ComparisonCountResult(int count, Statistics s) {
             super(ResultRole.SECONDARY, "Comparisons", s, "inv/it", AggregationPolicy.AVG);
+            this.count = count;
         }
 
         @Override
         protected Aggregator<ComparisonCountResult>
         getThreadAggregator() {
-            return results -> {
-                double aggregatedScore = 0.0D;
-                for (ComparisonCountResult result : results) {
-                    aggregatedScore += result.getScore();
-                }
-                return new ComparisonCountResult(new SingletonStatistics(aggregatedScore));
-            };
+            return this::aggregate;
         }
 
         @Override
         protected Aggregator<ComparisonCountResult>
         getIterationAggregator() {
-            return results -> {
-                double aggregatedScore = 0.0D;
-                for (ComparisonCountResult result : results) {
-                    aggregatedScore += result.getScore();
-                }
-                return new ComparisonCountResult(new SingletonStatistics(aggregatedScore));
-            };
+            return this::aggregate;
+        }
+
+        private ComparisonCountResult aggregate(Collection<ComparisonCountResult> results) {
+            double aggregatedScore = 0.0D;
+            for (ComparisonCountResult result : results) {
+                aggregatedScore += result.getScore();
+            }
+            return new ComparisonCountResult(1, new SingletonStatistics(aggregatedScore / count));
         }
     }
 }

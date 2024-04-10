@@ -17,7 +17,7 @@ class BTreeTest {
     public static final int TEST_SIZE = 1;
     public static final int REPEATS = 2;
 
-    public static final Boolean VERBOSE = false;
+    public static final Boolean VERBOSE = true;
     public static final Random RANDOM = new Random();
 
     @ParameterizedTest
@@ -315,6 +315,20 @@ class BTreeTest {
         println("OK");
         testSizeAndGrowthRate(bTree, capacity, parameters[TEST_SIZE]);
         System.out.println();
+    }
+
+    @Test
+    public void test() {
+        BTree<Integer, Integer> bTree = new BTree<>(4);
+
+        Integer[] data = new Integer[1000000];
+        for (int testSize = 0; testSize < data.length; testSize++)
+            data[testSize] = testSize;
+        shuffle(data);
+
+        System.out.println("Filling...");
+        for (int sample : data) bTree.insert(sample, sample);
+        testSizeAndGrowthRate(bTree, 4, 1000000);
     }
 
     @ParameterizedTest

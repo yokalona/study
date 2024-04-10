@@ -33,11 +33,11 @@ class DataBlockTest {
         for (int sample = 0; sample < 10; sample ++) assertEquals(sample - 1, dataBlock.find.lessThan(sample));
         for (int sample = 0; sample < 10; sample ++) assertEquals(sample + 1, dataBlock.find.greaterThan(sample));
 
-        for (int sample = 10; sample < 20; sample ++) assertEquals(-10, dataBlock.find.position(sample));
-        for (int sample = -1; sample > -11; sample --) assertEquals(0, dataBlock.find.position(sample));
+        for (int sample = 10; sample < 20; sample ++) assertEquals(-11, dataBlock.find.equal(sample));
+        for (int sample = -1; sample > -11; sample --) assertEquals(-1, dataBlock.find.equal(sample));
 
         dataBlock.remove(5);
-        assertEquals(5, dataBlock.find.position(6));
+        assertEquals(5, dataBlock.find.equal(6));
 
 
     }
