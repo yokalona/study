@@ -1,27 +1,42 @@
 package com.yokalona.tree.b;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import static com.yokalona.Validations.CAPACITY_SHOULD_BE_GREATER_THAN_2;
 import static com.yokalona.Validations.KEY_SHOULD_HAVE_NON_NULL_VALUE;
 
-public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extends Key>>
+public class DataBlock<Key extends Comparable<Key>, Value, Data extends HasKey<? extends Key> & HasValue<? extends Value> & HasLink<?>>
         implements Iterable<Data> {
-    private final Data[] array;
+    private final Kryo kryo;
+    private boolean loaded;
+    private Data[] array;
     private int size;
-    final Find find = new Find();
-    final Loader loader = new Loader();
 
-    public DataBlock(Supplier<? extends Data[]> supplier) {
-        this.array = supplier.get();
+    @SuppressWarnings("unchecked")
+    public DataBlock(int capacity, Class<Data> dataClass) {
+        assert capacity > 2 : CAPACITY_SHOULD_BE_GREATER_THAN_2;
+
+        this.kryo = new Kryo();
+        this.array = (Data[]) Array.newInstance(dataClass, capacity);
+
+        kryo.register(dataClass);
+        kryo.register(this.array.getClass());
     }
 
     public Data
     get(int index) {
-        if (!loader.loaded) loader.load();
         return array[index];
     }
 
@@ -29,7 +44,6 @@ public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extend
     replace(int index, Data value) {
         assert value != null : "Null values are not permitted";
 
-        if (!loader.loaded) loader.load();
         this.array[index] = value;
         assert check();
     }
@@ -38,7 +52,6 @@ public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extend
     insert(Data value) {
         assert value != null : "Null values are not permitted";
 
-        if (!loader.loaded) loader.load();
         array[size++] = value;
         assert check();
     }
@@ -47,7 +60,6 @@ public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extend
     insert(int index, Data value) {
         assert value != null : "Null values are not permitted";
 
-        if (!loader.loaded) loader.load();
         System.arraycopy(array, index, array, index + 1, size - index);
         array[index] = value;
         size++;
@@ -57,16 +69,14 @@ public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extend
 
     public void
     remove(int index) {
-        if (!loader.loaded) loader.load();
         System.arraycopy(array, index + 1, array, index, size - index - 1);
-        array[--size] = null;
+        array[-- size] = null;
 
         assert check();
     }
 
     private void
-    copyTo(DataBlock<Key, Data> other, int from, int to, int length) {
-        if (!loader.loaded) loader.load();
+    copyTo(DataBlock<Key, Value, Data> other, int from, int to, int length) {
         System.arraycopy(array, from, other.array, to, length);
         other.size += length;
 
@@ -75,8 +85,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extend
     }
 
     public void
-    splitWith(DataBlock<Key, Data> other) {
-        if (!loader.loaded) loader.load();
+    splitWith(DataBlock<Key, Value, Data> other) {
         copyTo(other, array.length / 2, 0, array.length / 2);
         remove(array.length / 2, array.length);
 
@@ -85,8 +94,7 @@ public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extend
     }
 
     public void
-    mergeWith(DataBlock<Key, Data> other) {
-        if (!loader.loaded) loader.load();
+    mergeWith(DataBlock<Key, Value, Data> other) {
         copyTo(other, 0, other.size, size);
 
         assert check();
@@ -95,7 +103,6 @@ public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extend
 
     public void
     remove(int from, int to) {
-        if (!loader.loaded) loader.load();
         Arrays.fill(array, from, to, null);
         size -= to - from;
 
@@ -104,7 +111,6 @@ public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extend
 
     public int
     length() {
-        if (!loader.loaded) loader.load();
         return this.array.length;
     }
 
@@ -116,26 +122,22 @@ public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extend
     @Override
     public Iterator<Data>
     iterator() {
-        if (!loader.loaded) loader.load();
         return Arrays.stream(this.array, 0, size).iterator();
     }
 
     @Override
     public void
     forEach(Consumer<? super Data> action) {
-        if (!loader.loaded) loader.load();
         Iterable.super.forEach(action);
     }
 
     @Override
     public Spliterator<Data>
     spliterator() {
-        if (!loader.loaded) loader.load();
         return Arrays.spliterator(array);
     }
 
     boolean check() {
-        if (!loader.loaded) loader.load();
         checkConsistency();
         assert isOrdered();
         return true;
@@ -160,54 +162,67 @@ public class DataBlock<Key extends Comparable<Key>, Data extends HasKey<? extend
         return true;
     }
 
-    class Find {
+    public int equal(final Key key) {
+        assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
 
-        public int equal(final Key key) {
-            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-
-            int left = 0, right = size - 1;
-            while (left <= right) {
-                int mid = left + (right - left) / 2;
-                int comparison = array[mid].key().compareTo(key);
-                if (comparison > 0) right = mid - 1;
-                else if (comparison < 0) left = mid + 1;
-                else return mid;
-            }
-            return -(left + 1);
+        int left = 0, right = size - 1;
+        while (left <= right) {
+            int mid = left + (right - left) / 2;
+            int comparison = array[mid].key().compareTo(key);
+            if (comparison > 0) right = mid - 1;
+            else if (comparison < 0) left = mid + 1;
+            else return mid;
         }
-
-        public int lessThan(final Key key) {
-            int equal = equal(key);
-            if (equal >= 0) return equal - 1;
-            else return Math.max(-equal - 2, 0);
-        }
-
-        public int greaterThan(final Key key) {
-            int equal = equal(key);
-            if (equal >= 0) return equal + 1;
-            else return Math.max(-equal - 1, 1);
-        }
+        return - (left + 1);
     }
 
-     class Loader {
+    public int lessThan(final Key key) {
+        int equal = equal(key);
+        if (equal >= 0) return equal - 1;
+        else return Math.max(- equal - 2, 0);
+    }
 
-        private boolean loaded = false;
+    public int greaterThan(final Key key) {
+        int equal = equal(key);
+        if (equal >= 0) return equal + 1;
+        else return Math.max(- equal - 1, 1);
+    }
 
-        private void load() {
-            // do nothing for now
+    public String
+    toString() {
+        return "[" + size + ':' + array.length + ']' + ' ' + appendArray();
+    }
+
+    private String
+    appendArray() {
+        if (!loaded) return "unloaded";
+        if (size == 0) return "[]";
+        StringBuilder sb = new StringBuilder();
+        sb.append('[');
+        for (int i = 0; i < Math.min(size, 10); i++) {
+            sb.append(array[i]).append(' ');
+        }
+        sb.deleteCharAt(sb.length() - 1);
+        if (size > 10) {
+            sb.repeat(".", 3);
+        }
+        return sb.append(']').toString();
+    }
+
+    public void load() throws FileNotFoundException {
+        try(Input input = new Input(new FileInputStream("file.bin"))) {
+            this.array = (Data[]) kryo.readObject(input, array.getClass());
             this.loaded = true;
-            Ignore.that(array);
         }
+    }
 
-        public void unload() {
+    @SuppressWarnings("unchecked")
+    public void unload() throws FileNotFoundException {
+        try(Output output = new Output(new FileOutputStream("file.bin"))) {
+            kryo.writeObject(output, array);
+            if (size != 0) array = (Data[]) Array.newInstance(array[0].getClass(), 0);
             this.loaded = false;
-            Ignore.that(array);
-            Arrays.fill(array, null);
         }
-
     }
 
-    private static class Ignore {
-        static void that(Object ignored) {}
-    }
 }

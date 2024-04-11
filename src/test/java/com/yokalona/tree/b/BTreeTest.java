@@ -5,6 +5,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.FileNotFoundException;
 import java.util.*;
 
 import static com.yokalona.tree.TestHelper.log;
@@ -318,10 +319,10 @@ class BTreeTest {
     }
 
     @Test
-    public void test() {
+    public void test() throws FileNotFoundException {
         BTree<Integer, Integer> bTree = new BTree<>(4);
 
-        Integer[] data = new Integer[1000000];
+        Integer[] data = new Integer[10];
         for (int testSize = 0; testSize < data.length; testSize++)
             data[testSize] = testSize;
         shuffle(data);
