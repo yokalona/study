@@ -221,7 +221,7 @@ public class DataBlock<Key extends Comparable<Key>, Value, Data extends HasKey<?
         try(Output output = new Output(new FileOutputStream("file.bin"))) {
             kryo.writeObject(output, array);
             if (size != 0) array = (Data[]) Array.newInstance(array[0].getClass(), 0);
-            this.loaded = false;
+            this.loaded = false; 
         }
     }
 
