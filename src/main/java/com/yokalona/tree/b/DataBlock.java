@@ -1,38 +1,52 @@
 package com.yokalona.tree.b;
 
 import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoSerializable;
+import com.esotericsoftware.kryo.Registration;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Spliterator;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 import static com.yokalona.Validations.CAPACITY_SHOULD_BE_GREATER_THAN_2;
 import static com.yokalona.Validations.KEY_SHOULD_HAVE_NON_NULL_VALUE;
 
 public class DataBlock<Key extends Comparable<Key>, Value, Data extends HasKey<? extends Key> & HasValue<? extends Value> & HasLink<?>>
-        implements Iterable<Data> {
-    private final Kryo kryo;
-    private boolean loaded;
-    private Data[] array;
+        implements Iterable<Data>, KryoSerializable {
+
     private int size;
+    private Data[] array;
+
+    private DataBlock() {}
 
     @SuppressWarnings("unchecked")
     public DataBlock(int capacity, Class<Data> dataClass) {
+        assert dataClass != null;
+        assert !dataClass.isArray();
         assert capacity > 2 : CAPACITY_SHOULD_BE_GREATER_THAN_2;
 
-        this.kryo = new Kryo();
         this.array = (Data[]) Array.newInstance(dataClass, capacity);
+    }
 
-        kryo.register(dataClass);
-        kryo.register(this.array.getClass());
+    @Override
+    public void
+    write(Kryo kryo, Output output) {
+        kryo.writeClass(output, array.getClass());
+        kryo.writeObject(output, array);
+        kryo.writeObject(output, size);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public void
+    read(Kryo kryo, Input input) {
+        Registration arrayClass = kryo.readClass(input);
+        this.array = (Data[]) kryo.readObject(input, arrayClass.getType());
+        this.size = kryo.readObject(input, int.class);
     }
 
     public Data
@@ -137,7 +151,8 @@ public class DataBlock<Key extends Comparable<Key>, Value, Data extends HasKey<?
         return Arrays.spliterator(array);
     }
 
-    boolean check() {
+    boolean
+    check() {
         checkConsistency();
         assert isOrdered();
         return true;
@@ -162,7 +177,8 @@ public class DataBlock<Key extends Comparable<Key>, Value, Data extends HasKey<?
         return true;
     }
 
-    public int equal(final Key key) {
+    public int
+    equal(final Key key) {
         assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
 
         int left = 0, right = size - 1;
@@ -176,13 +192,15 @@ public class DataBlock<Key extends Comparable<Key>, Value, Data extends HasKey<?
         return - (left + 1);
     }
 
-    public int lessThan(final Key key) {
+    public int
+    lessThan(final Key key) {
         int equal = equal(key);
         if (equal >= 0) return equal - 1;
         else return Math.max(- equal - 2, 0);
     }
 
-    public int greaterThan(final Key key) {
+    public int
+    greaterThan(final Key key) {
         int equal = equal(key);
         if (equal >= 0) return equal + 1;
         else return Math.max(- equal - 1, 1);
@@ -195,34 +213,18 @@ public class DataBlock<Key extends Comparable<Key>, Value, Data extends HasKey<?
 
     private String
     appendArray() {
-        if (!loaded) return "unloaded";
         if (size == 0) return "[]";
         StringBuilder sb = new StringBuilder();
         sb.append('[');
-        for (int i = 0; i < Math.min(size, 10); i++) {
-            sb.append(array[i]).append(' ');
+        int iterations = Math.min(size, 10);
+        for (int i = 0; i < iterations; i++) {
+            sb.append(array[i]);
+            if (i < iterations - 1) sb.append('\n').append('\t').append('\t');
         }
-        sb.deleteCharAt(sb.length() - 1);
         if (size > 10) {
             sb.repeat(".", 3);
         }
         return sb.append(']').toString();
-    }
-
-    public void load() throws FileNotFoundException {
-        try(Input input = new Input(new FileInputStream("file.bin"))) {
-            this.array = (Data[]) kryo.readObject(input, array.getClass());
-            this.loaded = true;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public void unload() throws FileNotFoundException {
-        try(Output output = new Output(new FileOutputStream("file.bin"))) {
-            kryo.writeObject(output, array);
-            if (size != 0) array = (Data[]) Array.newInstance(array[0].getClass(), 0);
-            this.loaded = false; 
-        }
     }
 
 }

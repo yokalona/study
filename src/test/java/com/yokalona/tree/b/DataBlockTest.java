@@ -9,10 +9,11 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class DataBlockTest {
+
+    String fileName = "test-" + getClass().getSimpleName() + ".db";
 
     @Test
     public void testInsert() {
@@ -48,31 +49,35 @@ class DataBlockTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void testLoad() throws FileNotFoundException {
-//        Kryo kryo = new Kryo();
-//        kryo.register(DataBlock.class);
-//        kryo.register(DataBlock.class);
-//        kryo.register(Datapoint.class);
-//        kryo.register(Datapoint[].class);
         DataBlock<Integer, Integer, Datapoint> dataBlock = new DataBlock<>(10, Datapoint.class);
-//        dataBlock.insert(new Datapoint(0, 0, "0"));
-//        dataBlock.insert(new Datapoint(1, 1, "1"));
-//        dataBlock.insert(new Datapoint(2, 2, "2"));
+        dataBlock.insert(new Datapoint(0, 0, "0"));
+        dataBlock.insert(new Datapoint(1, 1, "1"));
+        dataBlock.insert(new Datapoint(2, 2, "2"));
+        dataBlock.insert(new Datapoint(5, 5, "5"));
 
-        dataBlock.unload();
-        System.out.println(dataBlock);
-        dataBlock.load();
-        System.out.println(dataBlock);
+        Kryo kryo = new Kryo();
+        kryo.register(DataBlock.class);
+        kryo.register(Datapoint.class);
+        kryo.register(Datapoint[].class);
+        try (Output output = new Output(new FileOutputStream(fileName))) {
+            kryo.writeObject(output, dataBlock);
+        }
 
-//        Output output = new Output(new FileOutputStream("file.bin"));
-//        kryo.writeObject(output, dataBlock);
-//        output.close();
-//
-//        Input input = new Input(new FileInputStream("file.bin"));
-//        @SuppressWarnings("unchecked")
-//        DataBlock<Integer, Integer, Datapoint> object2 = (DataBlock<Integer, Integer, Datapoint>) kryo.readObject(input, DataBlock.class);
-//        input.close();
-//        System.out.println(object2);
+        assertNotNull(dataBlock);
+        dataBlock = null;
+        assertNull(dataBlock);
+        System.gc();
+        try (Input input = new Input(new FileInputStream(fileName))) {
+            dataBlock = kryo.readObject(input, DataBlock.class);
+            assertNotNull(dataBlock);
+            dataBlock.check();
+            assertEquals(0, dataBlock.get(0).key);
+            assertEquals(1, dataBlock.get(1).key);
+            assertEquals(2, dataBlock.get(2).key);
+            assertEquals(5, dataBlock.get(3).key);
+        }
     }
 
     private record Datapoint(Integer key, Integer value, Object link)

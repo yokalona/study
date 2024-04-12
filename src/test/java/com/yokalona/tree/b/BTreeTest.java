@@ -318,20 +318,6 @@ class BTreeTest {
         System.out.println();
     }
 
-    @Test
-    public void test() throws FileNotFoundException {
-        BTree<Integer, Integer> bTree = new BTree<>(4);
-
-        Integer[] data = new Integer[10];
-        for (int testSize = 0; testSize < data.length; testSize++)
-            data[testSize] = testSize;
-        shuffle(data);
-
-        System.out.println("Filling...");
-        for (int sample : data) bTree.insert(sample, sample);
-        testSizeAndGrowthRate(bTree, 4, 1000000);
-    }
-
     @ParameterizedTest
     @MethodSource("loadParameters")
     public void testRepeatInserts(int[] parameters) {
