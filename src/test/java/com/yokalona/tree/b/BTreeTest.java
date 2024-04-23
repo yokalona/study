@@ -5,7 +5,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.FileNotFoundException;
 import java.util.*;
 
 import static com.yokalona.tree.TestHelper.log;
@@ -18,8 +17,12 @@ class BTreeTest {
     public static final int TEST_SIZE = 1;
     public static final int REPEATS = 2;
 
-    public static final Boolean VERBOSE = true;
+    public static final Boolean VERBOSE = false;
     public static final Random RANDOM = new Random();
+
+    static {
+        DataBlock.ENABLE_CHECK = true;
+    }
 
     @ParameterizedTest
     @MethodSource("loadParameters")

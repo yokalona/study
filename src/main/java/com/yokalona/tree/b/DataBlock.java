@@ -1,11 +1,5 @@
 package com.yokalona.tree.b;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.KryoSerializable;
-import com.esotericsoftware.kryo.Registration;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
-
 import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -15,55 +9,90 @@ import java.util.function.Consumer;
 import static com.yokalona.Validations.CAPACITY_SHOULD_BE_GREATER_THAN_2;
 import static com.yokalona.Validations.KEY_SHOULD_HAVE_NON_NULL_VALUE;
 
-public class DataBlock<Key extends Comparable<Key>, Value, Data extends HasKey<? extends Key> & HasValue<? extends Value> & HasLink<?>>
-        implements Iterable<Data>, KryoSerializable {
+public class DataBlock<Key extends Comparable<Key>, Value>
+        implements Iterable<Leaf<Key, Value>> {
+
+    public static boolean ENABLE_CHECK = false;
 
     private int size;
-    private Data[] array;
-
-    private DataBlock() {}
+    private final Leaf<Key, Value>[] array;
 
     @SuppressWarnings("unchecked")
-    public DataBlock(int capacity, Class<Data> dataClass) {
-        assert dataClass != null;
-        assert !dataClass.isArray();
+    public DataBlock(int capacity) {
         assert capacity > 2 : CAPACITY_SHOULD_BE_GREATER_THAN_2;
 
-        this.array = (Data[]) Array.newInstance(dataClass, capacity);
+        this.array = (Leaf<Key, Value>[]) Array.newInstance(Leaf.class, capacity);
     }
 
-    @Override
-    public void
-    write(Kryo kryo, Output output) {
-        kryo.writeClass(output, array.getClass());
-        kryo.writeObject(output, array);
-        kryo.writeObject(output, size);
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public void
-    read(Kryo kryo, Input input) {
-        Registration arrayClass = kryo.readClass(input);
-        this.array = (Data[]) kryo.readObject(input, arrayClass.getType());
-        this.size = kryo.readObject(input, int.class);
-    }
-
-    public Data
+    public Leaf<Key, Value>
     get(int index) {
         return array[index];
     }
 
-    public void
-    replace(int index, Data value) {
-        assert value != null : "Null values are not permitted";
+    public Key
+    getMaxKey() {
+        return array[size - 1].key();
+    }
 
-        this.array[index] = value;
+    public Key
+    getMinKey() {
+        return array[0].key();
+    }
+
+    public Node<Key, Value>
+    getMaxLink() {
+        return array[size - 1].link();
+    }
+
+    public Node<Key, Value>
+    getMinLink() {
+        return array[0].link();
+    }
+
+    public Entry<Key, Value>
+    getMaxEntry() {
+        return Entry.fromLeaf(array[size - 1]);
+    }
+
+    public Entry<Key, Value>
+    getMinEntry() {
+        return Entry.fromLeaf(array[0]);
+    }
+
+    public boolean
+    contains(int index) {
+        return array[index] != null;
+    }
+
+    public Key
+    getKey(int index) {
+        return array[index].key();
+    }
+
+    public Value
+    getValue(int index) {
+        return array[index].value();
+    }
+
+    public Node<Key, Value>
+    getLink(int index) {
+        return array[index].link();
+    }
+
+    public void
+    replaceInternal(int index, Key key, Node<Key, Value> link) {
+        this.array[index] = Leaf.internal(key, link);
         assert check();
     }
 
     public void
-    insert(Data value) {
+    replaceExternal(int index, Key key, Value value) {
+        this.array[index] = Leaf.external(key, value);
+        assert check();
+    }
+
+    public void
+    insert(Leaf<Key, Value> value) {
         assert value != null : "Null values are not permitted";
 
         array[size++] = value;
@@ -71,11 +100,41 @@ public class DataBlock<Key extends Comparable<Key>, Value, Data extends HasKey<?
     }
 
     public void
-    insert(int index, Data value) {
+    insertMin(DataBlock<Key, Value> dataBlock) {
+//        assert value != null : "Null values are not permitted";
+
+        array[size++] = dataBlock.get(0);
+        assert check();
+    }
+
+    public void
+    insertExternal(int index, Key key, Value value) {
         assert value != null : "Null values are not permitted";
 
         System.arraycopy(array, index, array, index + 1, size - index);
-        array[index] = value;
+        array[index] = Leaf.external(key, value);
+        size++;
+
+        assert check();
+    }
+
+    public void
+    insertInternal(int index, Key key, Node<Key, Value> link) {
+        assert link != null : "Null link is not permitted";
+
+        System.arraycopy(array, index, array, index + 1, size - index);
+        array[index] = Leaf.internal(key, link);
+        size++;
+
+        assert check();
+    }
+
+    public void
+    insertMax(int index, DataBlock<Key, Value> value) {
+        assert value != null : "Null values are not permitted";
+
+        System.arraycopy(array, index, array, index + 1, size - index);
+        array[index] = value.get(value.size - 1);
         size++;
 
         assert check();
@@ -90,7 +149,7 @@ public class DataBlock<Key extends Comparable<Key>, Value, Data extends HasKey<?
     }
 
     private void
-    copyTo(DataBlock<Key, Value, Data> other, int from, int to, int length) {
+    copyTo(DataBlock<Key, Value> other, int from, int to, int length) {
         System.arraycopy(array, from, other.array, to, length);
         other.size += length;
 
@@ -99,7 +158,7 @@ public class DataBlock<Key extends Comparable<Key>, Value, Data extends HasKey<?
     }
 
     public void
-    splitWith(DataBlock<Key, Value, Data> other) {
+    splitWith(DataBlock<Key, Value> other) {
         copyTo(other, array.length / 2, 0, array.length / 2);
         remove(array.length / 2, array.length);
 
@@ -108,7 +167,7 @@ public class DataBlock<Key extends Comparable<Key>, Value, Data extends HasKey<?
     }
 
     public void
-    mergeWith(DataBlock<Key, Value, Data> other) {
+    mergeWith(DataBlock<Key, Value> other) {
         copyTo(other, 0, other.size, size);
 
         assert check();
@@ -134,39 +193,38 @@ public class DataBlock<Key extends Comparable<Key>, Value, Data extends HasKey<?
     }
 
     @Override
-    public Iterator<Data>
+    public Iterator<Leaf<Key, Value>>
     iterator() {
         return Arrays.stream(this.array, 0, size).iterator();
     }
 
     @Override
     public void
-    forEach(Consumer<? super Data> action) {
+    forEach(Consumer<? super Leaf<Key, Value>> action) {
         Iterable.super.forEach(action);
     }
 
     @Override
-    public Spliterator<Data>
+    public Spliterator<Leaf<Key, Value>>
     spliterator() {
         return Arrays.spliterator(array);
     }
 
     boolean
     check() {
-        checkConsistency();
-        assert isOrdered();
+        assert ! ENABLE_CHECK || (checkConsistency() && isOrdered());
         return true;
     }
 
-    void
+    boolean
     checkConsistency() {
         assert size >= 0;
         assert size <= array.length;
-        for (int point = 0; point < size; point++) assert array[point] != null;
-        for (int point = size; point < array.length; point++) assert array[point] == null;
+        for (int point = 0; point < size; point++) if (array[point] == null) return false;
+        for (int point = size; point < array.length; point++) if (array[point] != null) return false;
+        return true;
     }
 
-    @SuppressWarnings("unchecked")
     boolean
     isOrdered() {
         Key previous = null;

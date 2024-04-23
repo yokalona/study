@@ -17,12 +17,12 @@ class DataBlockTest {
 
     @Test
     public void testInsert() {
-        DataBlock<Integer, Integer, Datapoint> dataBlock = new DataBlock<>(10, Datapoint.class);
+        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10);
         assertEquals(0, dataBlock.size());
         assertEquals(10, dataBlock.length());
 
         for (int sample = 0; sample < 10; sample++) {
-            dataBlock.insert(new Datapoint(sample, sample, null));
+            dataBlock.insert(new Leaf<>(sample, sample, null, true));
             assertTrue(dataBlock.isOrdered());
             dataBlock.checkConsistency();
         }
@@ -33,8 +33,8 @@ class DataBlockTest {
 
     @Test
     public void testFind() {
-        DataBlock<Integer, Integer, Datapoint> dataBlock = new DataBlock<>(10, Datapoint.class);
-        for (int sample = 0; sample < 10; sample++) dataBlock.insert(new Datapoint(sample, sample, null));
+        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10);
+        for (int sample = 0; sample < 10; sample++) dataBlock.insert(new Leaf<>(sample, sample, null, true));
         assertEquals(10, dataBlock.size());
         assertTrue(dataBlock.isOrdered());
         for (int sample = 0; sample < 10; sample++) assertEquals(sample, dataBlock.equal(sample));
@@ -51,37 +51,29 @@ class DataBlockTest {
     @Test
     @SuppressWarnings("unchecked")
     public void testLoad() throws FileNotFoundException {
-        DataBlock<Integer, Integer, Datapoint> dataBlock = new DataBlock<>(10, Datapoint.class);
-        dataBlock.insert(new Datapoint(0, 0, "0"));
-        dataBlock.insert(new Datapoint(1, 1, "1"));
-        dataBlock.insert(new Datapoint(2, 2, "2"));
-        dataBlock.insert(new Datapoint(5, 5, "5"));
+        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10);
+        dataBlock.insert(new Leaf<>(0, 0, new Node<>(10), false));
+        dataBlock.insert(new Leaf<>(1, 1, new Node<>(10), false));
+        dataBlock.insert(new Leaf<>(2, 2, new Node<>(10), false));
+        dataBlock.insert(new Leaf<>(5, 5, new Node<>(10), false));
 
-        Kryo kryo = new Kryo();
-        kryo.register(DataBlock.class);
-        kryo.register(Datapoint.class);
-        kryo.register(Datapoint[].class);
+        Loader<Integer, Integer> loader = new Loader<>("test", 10);
         try (Output output = new Output(new FileOutputStream(fileName))) {
-            kryo.writeObject(output, dataBlock);
+            loader.kryo().writeObject(output, dataBlock);
         }
 
         assertNotNull(dataBlock);
         dataBlock = null;
-        assertNull(dataBlock);
         System.gc();
         try (Input input = new Input(new FileInputStream(fileName))) {
-            dataBlock = kryo.readObject(input, DataBlock.class);
+            dataBlock = loader.kryo().readObject(input, DataBlock.class);
             assertNotNull(dataBlock);
             dataBlock.check();
-            assertEquals(0, dataBlock.get(0).key);
-            assertEquals(1, dataBlock.get(1).key);
-            assertEquals(2, dataBlock.get(2).key);
-            assertEquals(5, dataBlock.get(3).key);
+            assertEquals(0, dataBlock.get(0).key());
+            assertEquals(1, dataBlock.get(1).key());
+            assertEquals(2, dataBlock.get(2).key());
+            assertEquals(5, dataBlock.get(3).key());
         }
-    }
-
-    private record Datapoint(Integer key, Integer value, Object link)
-            implements HasKey<Integer>, HasValue<Integer>, HasLink<Object> {
     }
 
 }
