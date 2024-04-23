@@ -15,10 +15,13 @@ public class DataBlock<Key extends Comparable<Key>, Value>
     private final Object[] values;
     private final Node<Key, Value>[] links;
 
+    private final transient Loader<Key, Value> loader;
+
     @SuppressWarnings("unchecked")
-    public DataBlock(int capacity) {
+    public DataBlock(int capacity, Loader<Key, Value> loader) {
         assert capacity > 2 : CAPACITY_SHOULD_BE_GREATER_THAN_2;
 
+        this.loader = loader;
         this.keys = new Object[capacity];
         this.values = new Object[capacity];
         this.links = (Node<Key, Value>[]) new Node[capacity];
@@ -26,64 +29,71 @@ public class DataBlock<Key extends Comparable<Key>, Value>
 
     @SuppressWarnings("unchecked")
     public Key
-    getKey(int index) {
+    key(int index) {
         return (Key) keys[index];
     }
 
     public Key
-    getMinKey() {
-        return getKey(0);
+    minKey() {
+        return key(0);
     }
 
     public Key
-    getMaxKey() {
-        return getKey(size - 1);
+    maxKey() {
+        return key(size - 1);
     }
 
     public Node<Key, Value>
-    getLink(int index) {
+    link(int index) {
+        loader.loadNode(index);
         return links[index];
     }
 
-    public Node<Key, Value>
-    getMinLink() {
-        return getLink(0);
+    private void
+    link(int index, Node<Key, Value> link) {
+        links[index] = link;
+        loader.flushNode(index);
     }
 
     public Node<Key, Value>
-    getMaxLink() {
-        return getLink(size - 1);
+    minLink() {
+        return link(0);
+    }
+
+    public Node<Key, Value>
+    maxLink() {
+        return link(size - 1);
     }
 
     public Entry<Key, Value>
-    getEntry(int index) {
-        return new Entry<>(getKey(index), getValue(index));
+    entry(int index) {
+        return new Entry<>(key(index), value(index));
     }
 
     public Entry<Key, Value>
-    getMinEntry() {
-        return getEntry(0);
+    minEntry() {
+        return entry(0);
     }
 
     public Entry<Key, Value>
-    getMaxEntry() {
-        return getEntry(size - 1);
+    maxEntry() {
+        return entry(size - 1);
     }
 
     @SuppressWarnings("unchecked")
     public Value
-    getValue(int index) {
+    value(int index) {
         return (Value) values[index];
     }
 
     public Value
-    getMinValue() {
-        return getValue(0);
+    minValue() {
+        return value(0);
     }
 
     public Value
-    getMaxValue() {
-        return getValue(size - 1);
+    maxValue() {
+        return value(size - 1);
     }
 
     public boolean
@@ -117,7 +127,7 @@ public class DataBlock<Key extends Comparable<Key>, Value>
 
         insertKey(index, key);
         System.arraycopy(links, index, links, index + 1, size - index);
-        links[index] = link;
+        link(index, link);
         size++;
 
         assert check();
@@ -127,8 +137,8 @@ public class DataBlock<Key extends Comparable<Key>, Value>
     insertMinFrom(DataBlock<Key, Value> datablock, boolean leaf) {
         assert datablock != null : DATA_BLOCK_CANNOT_BE_NULL;
 
-        if (leaf) insertExternal(size, datablock.getMinKey(), datablock.getMinValue());
-        else insertInternal(size, datablock.getMinKey(), datablock.getMinLink());
+        if (leaf) insertExternal(size, datablock.minKey(), datablock.minValue());
+        else insertInternal(size, datablock.minKey(), datablock.minLink());
 
         assert check();
     }
@@ -137,8 +147,8 @@ public class DataBlock<Key extends Comparable<Key>, Value>
     insertMaxFrom(int index, DataBlock<Key, Value> datablock, boolean leaf) {
         assert datablock != null : DATA_BLOCK_CANNOT_BE_NULL;
 
-        if (leaf) insertExternal(index, datablock.getMaxKey(), datablock.getMaxValue());
-        else insertInternal(index, datablock.getMaxKey(), datablock.getMaxLink());
+        if (leaf) insertExternal(index, datablock.maxKey(), datablock.maxValue());
+        else insertInternal(index, datablock.maxKey(), datablock.maxLink());
 
         assert check();
     }
@@ -149,7 +159,8 @@ public class DataBlock<Key extends Comparable<Key>, Value>
         assert link != null : NULL_LINK_IS_NOT_PERMITTED;
 
         this.keys[index] = key;
-        this.links[index] = link;
+        link(index, link);
+        loader.flushNode(index);
 
         assert check();
     }
@@ -173,6 +184,7 @@ public class DataBlock<Key extends Comparable<Key>, Value>
         } else {
             System.arraycopy(links, index + 1, links, index, size - index - 1);
             links[size - 1] = null;
+            loader.flushNodes();
         }
         keys[-- size] = null;
 
@@ -183,7 +195,10 @@ public class DataBlock<Key extends Comparable<Key>, Value>
     remove(int from, int to, boolean leaf) {
         Arrays.fill(keys, from, to, null);
         if (leaf) Arrays.fill(values, from, to, null);
-        else Arrays.fill(links, from, to, null);
+        else {
+            Arrays.fill(links, from, to, null);
+            loader.flushNodes();
+        }
         size -= to - from;
 
         assert check();
@@ -193,7 +208,10 @@ public class DataBlock<Key extends Comparable<Key>, Value>
     copyTo(DataBlock<Key, Value> other, int from, int to, int length, boolean leaf) {
         System.arraycopy(keys, from, other.keys, to, length);
         if (leaf) System.arraycopy(values, from, other.values, to, length);
-        else System.arraycopy(links, from, other.links, to, length);
+        else {
+            System.arraycopy(links, from, other.links, to, length);
+            loader.flushNodes();
+        }
         other.size += length;
 
         assert check();
@@ -230,7 +248,7 @@ public class DataBlock<Key extends Comparable<Key>, Value>
     private List<Leaf<Key, Value>> formList() {
         List<Leaf<Key, Value>> list = new ArrayList<>();
         for (int leaf = 0; leaf < size; leaf++) {
-            list.add(new Leaf<>(getKey(leaf), getValue(leaf), getLink(leaf)));
+            list.add(new Leaf<>(key(leaf), value(leaf), link(leaf)));
         }
         return list;
     }
@@ -273,7 +291,7 @@ public class DataBlock<Key extends Comparable<Key>, Value>
     isOrdered() {
         Key previous = null;
         for (int point = 0; point < size; point++) {
-            if (previous == null || getKey(point).compareTo(previous) > 0) previous = getKey(point);
+            if (previous == null || key(point).compareTo(previous) > 0) previous = key(point);
             else return false;
         }
         return true;
@@ -286,7 +304,7 @@ public class DataBlock<Key extends Comparable<Key>, Value>
         int left = 0, right = size - 1;
         while (left <= right) {
             int mid = left + (right - left) / 2;
-            int comparison = getKey(mid).compareTo(key);
+            int comparison = key(mid).compareTo(key);
             if (comparison > 0) right = mid - 1;
             else if (comparison < 0) left = mid + 1;
             else return mid;

@@ -15,10 +15,13 @@ public class BTree<Key extends Comparable<Key>, Value>
     private int height = 0;
     private int size = 0;
 
+    private final transient Loader<Key, Value> loader;
+
     public BTree(final int capacity) {
         validateCapacity(capacity);
         this.capacity = capacity;
-        this.root = new Node<>(capacity);
+        this.loader = new Loader<>("", capacity);
+        this.root = new Node<>(capacity, loader);
     }
 
     @Override
@@ -44,9 +47,9 @@ public class BTree<Key extends Comparable<Key>, Value>
         if (! result.inserted()) return false;
         size++;
         if (result.node() == null) return true;
-        final Node<Key, Value> split = new Node<>(capacity);
-        split.children().insertInternal(0, root.children().getMinKey(), root);
-        split.children().insertInternal(1, result.node().children().getMinKey(), result.node());
+        final Node<Key, Value> split = new Node<>(capacity, loader);
+        split.children().insertInternal(0, root.children().minKey(), root);
+        split.children().insertInternal(1, result.node().children().minKey(), result.node());
         root = split;
         height++;
         return true;
@@ -60,8 +63,8 @@ public class BTree<Key extends Comparable<Key>, Value>
         assert isBTree();
         if (! removed) return false;
         size--;
-        if (root.children().size() == 1 && root.children().getMinLink() != null) {
-            root = root.children().getMinLink();
+        if (root.children().size() == 1 && root.children().minLink() != null) {
+            root = root.children().minLink();
             height--;
         }
         return true;
@@ -84,23 +87,23 @@ public class BTree<Key extends Comparable<Key>, Value>
     clear() {
         size = 0;
         height = 0;
-        root = new Node<>(capacity);
+        root = new Node<>(capacity, loader);
     }
 
     public Entry<Key, Value>
     min() {
         if (root.children().size() == 0) return null;
         Node<Key, Value> node = root;
-        while (node.children().getMinLink() != null) node = node.children().getMinLink();
-        return node.children().getMinEntry();
+        while (node.children().minLink() != null) node = node.children().minLink();
+        return node.children().minEntry();
     }
 
     public Entry<Key, Value>
     max() {
         if (root.children().size() == 0) return null;
         Node<Key, Value> node = root;
-        while (node.children().getMaxLink() != null) node = node.children().getMaxLink();
-        return node.children().getMaxEntry();
+        while (node.children().maxLink() != null) node = node.children().maxLink();
+        return node.children().maxEntry();
     }
 
     @Override
@@ -193,8 +196,8 @@ public class BTree<Key extends Comparable<Key>, Value>
     printNode(Node<?, ?> node, int height, String indent, StringBuilder sb, DataBlock<?, ?> children) {
         for (int child = 0; child < node.children().size(); child++) {
             if (child > 0 || node.children().size() == 1) sb.append(indent)
-                    .append("(").append(children.getKey(child)).append(")\n");
-            sb.append(toString(children.getLink(child), height - 1, indent + INDENT));
+                    .append("(").append(children.key(child)).append(")\n");
+            sb.append(toString(children.link(child), height - 1, indent + INDENT));
         }
     }
 
@@ -202,7 +205,7 @@ public class BTree<Key extends Comparable<Key>, Value>
     printLeaf(Node<?, ?> node, String indent, StringBuilder sb, DataBlock<?, ?> children) {
         for (int child = 0; child < node.children().size(); child++) {
             sb.append(indent)
-                    .append(children.getKey(child)).append(" ").append(children.getValue(child)).append("\n");
+                    .append(children.key(child)).append(" ").append(children.value(child)).append("\n");
         }
     }
 }

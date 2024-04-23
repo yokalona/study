@@ -1,6 +1,5 @@
 package com.yokalona.tree.b;
 
-import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.junit.jupiter.api.Test;
@@ -17,7 +16,8 @@ class DataBlockTest {
 
     @Test
     public void testInsert() {
-        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10);
+        Loader<Integer, Integer> loader = new Loader<>(fileName, 10);
+        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, loader);
         assertEquals(0, dataBlock.size());
         assertEquals(10, dataBlock.length());
 
@@ -33,7 +33,8 @@ class DataBlockTest {
 
     @Test
     public void testFind() {
-        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10);
+        Loader<Integer, Integer> loader = new Loader<>(fileName, 10);
+        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, loader);
         for (int sample = 0; sample < 10; sample++) dataBlock.insertExternal(sample, sample, sample);
         assertEquals(10, dataBlock.size());
         assertTrue(dataBlock.isOrdered());
@@ -51,13 +52,13 @@ class DataBlockTest {
     @Test
     @SuppressWarnings("unchecked")
     public void testLoad() throws FileNotFoundException {
-        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10);
+        Loader<Integer, Integer> loader = new Loader<>(fileName, 10);
+        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, loader);
         dataBlock.insertExternal(0, 0, 0);
         dataBlock.insertExternal(1, 1, 1);
         dataBlock.insertExternal(2, 2, 2);
         dataBlock.insertExternal(3, 5, 5);
 
-        Loader<Integer, Integer> loader = new Loader<>("test", 10);
         try (Output output = new Output(new FileOutputStream(fileName))) {
             loader.kryo().writeObject(output, dataBlock);
         }
@@ -69,10 +70,10 @@ class DataBlockTest {
             dataBlock = loader.kryo().readObject(input, DataBlock.class);
             assertNotNull(dataBlock);
             dataBlock.check();
-            assertEquals(0, dataBlock.getKey(0));
-            assertEquals(1, dataBlock.getKey(1));
-            assertEquals(2, dataBlock.getKey(2));
-            assertEquals(5, dataBlock.getKey(3));
+            assertEquals(0, dataBlock.key(0));
+            assertEquals(1, dataBlock.key(1));
+            assertEquals(2, dataBlock.key(2));
+            assertEquals(5, dataBlock.key(3));
         }
     }
 

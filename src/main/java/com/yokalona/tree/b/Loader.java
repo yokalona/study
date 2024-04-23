@@ -10,9 +10,9 @@ public record Loader<Key extends Comparable<Key>, Value>(String name, Kryo kryo,
         this.name = name;
         this.capacity = capacity;
         kryo.register(Object[].class);
-        kryo.register(Node.class).setInstantiator((ObjectInstantiator<Node<Key, Value>>) () -> new Node<>(capacity));
+        kryo.register(Node.class).setInstantiator((ObjectInstantiator<Node<Key, Value>>) () -> new Node<>(capacity, this));
         kryo.register(Node[].class);
-        kryo.register(DataBlock.class).setInstantiator((ObjectInstantiator<DataBlock<Key, Value>>) () -> new DataBlock<>(capacity));
+        kryo.register(DataBlock.class).setInstantiator((ObjectInstantiator<DataBlock<Key, Value>>) () -> new DataBlock<>(capacity, this));
         kryo.register(BTree.class).setInstantiator((ObjectInstantiator<BTree<Key, Value>>) () -> new BTree<>(capacity));
     }
 
@@ -20,8 +20,18 @@ public record Loader<Key extends Comparable<Key>, Value>(String name, Kryo kryo,
         this(name, new Kryo(), capacity);
     }
 
-    void loadNode() {
+    public void
+    loadNode(int index) {
 
     }
 
+    public void
+    flushNodes() {
+
+    }
+
+    public void
+    flushNode(int index) {
+
+    }
 }

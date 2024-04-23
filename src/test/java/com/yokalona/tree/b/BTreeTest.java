@@ -88,26 +88,6 @@ class BTreeTest {
         }
     }
 
-    @Test
-    public void test() {
-
-        Integer[] data = new Integer[] {3, 8, 4, 5, 2, 6, 1, 7, 9, 0};
-        Integer[] removal = new Integer[] {2, 0, 4, 9, 1};
-
-        BTree<Integer, Integer> bTree = new BTree<>(4);
-        for (Integer sample : data) {
-            bTree.insert(sample, sample);
-        }
-        for (Integer remove : removal) {
-            System.out.println("removing " + remove);
-            if (remove == 1) {
-                int b = 0;
-            }
-            bTree.remove(remove);
-            System.out.println(bTree);
-        }
-    }
-
     private static void print(String s) {
         if (VERBOSE) System.out.print(s);
     }
@@ -126,7 +106,7 @@ class BTreeTest {
         for (int i = 1; i < Math.min(data.length, 1000); i++) {
             sb.append(' ').append(data[i]);
         }
-        printf(message, sb.append("..."));
+        if (data.length > 1000) printf(message, sb.append("..."));
     }
 
     @ParameterizedTest
