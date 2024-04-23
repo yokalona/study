@@ -17,7 +17,7 @@ class BTreeTest {
     public static final int TEST_SIZE = 1;
     public static final int REPEATS = 2;
 
-    public static final Boolean VERBOSE = false;
+    public static final Boolean VERBOSE = true;
     public static final Random RANDOM = new Random();
 
     static {
@@ -85,6 +85,26 @@ class BTreeTest {
             }
             assertEquals(0, bTree.size());
             assertEquals(0, bTree.height());
+        }
+    }
+
+    @Test
+    public void test() {
+
+        Integer[] data = new Integer[] {3, 8, 4, 5, 2, 6, 1, 7, 9, 0};
+        Integer[] removal = new Integer[] {2, 0, 4, 9, 1};
+
+        BTree<Integer, Integer> bTree = new BTree<>(4);
+        for (Integer sample : data) {
+            bTree.insert(sample, sample);
+        }
+        for (Integer remove : removal) {
+            System.out.println("removing " + remove);
+            if (remove == 1) {
+                int b = 0;
+            }
+            bTree.remove(remove);
+            System.out.println(bTree);
         }
     }
 

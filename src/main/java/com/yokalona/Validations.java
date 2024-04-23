@@ -8,6 +8,8 @@ public class Validations {
     public static final String ROOT_SHOULD_HAVE_NON_NULL_VALUE = "Root should have non-null value";
     public static final String NODE_SHOULD_HAVE_NON_NULL_VALUE = "Node should have non-null value";
     public static final String KEY_SHOULD_HAVE_NON_NULL_VALUE = "Key should have non null value";
+    public static final String NULL_LINK_IS_NOT_PERMITTED = "Null link is not permitted";
+    public static final String DATA_BLOCK_CANNOT_BE_NULL = "Data block cannot be null";
     public static final String ORDER_CONSISTENCY_VIOLATED = "Order consistency violated";
     public static final String HEIGHT_CAN_NOT_BE_NEGATIVE = "Height can not be negative";
     public static final String CHILD_CAN_NOT_BE_NEGATIVE = "Child can not be negative";

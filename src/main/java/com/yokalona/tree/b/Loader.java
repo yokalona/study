@@ -9,8 +9,7 @@ public record Loader<Key extends Comparable<Key>, Value>(String name, Kryo kryo,
         this.kryo = kryo;
         this.name = name;
         this.capacity = capacity;
-        kryo.register(Leaf.class);
-        kryo.register(Leaf[].class);
+        kryo.register(Object[].class);
         kryo.register(Node.class).setInstantiator((ObjectInstantiator<Node<Key, Value>>) () -> new Node<>(capacity));
         kryo.register(Node[].class);
         kryo.register(DataBlock.class).setInstantiator((ObjectInstantiator<DataBlock<Key, Value>>) () -> new DataBlock<>(capacity));

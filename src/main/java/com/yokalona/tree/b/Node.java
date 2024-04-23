@@ -21,20 +21,20 @@ public class Node<Key extends Comparable<Key>, Value> {
     }
 
     private Node<Key, Value>
-    split() {
+    split(boolean leaf) {
         final Node<Key, Value> split = new Node<>(children.length());
-        children.splitWith(split.children);
+        children.splitWith(split.children, leaf);
         return split;
     }
 
     private void
-    balance(final Node<Key, Value> parent, final int index) {
+    balance(final Node<Key, Value> parent, final int index, final boolean leaf) {
         final Node<Key, Value> left = leftSibling(parent, index);
         final Node<Key, Value> right = rightSibling(parent, index);
-        if (right != null && right.haveSpare()) rotateLeft(parent, index, right);
-        else if (left != null && left.haveSpare()) rotateRight(parent, index, left);
-        else if (left != null) mergeWith(left, parent, index);
-        else if (right != null) right.mergeWith(this, parent, index + 1);
+        if (right != null && right.haveSpare()) rotateLeft(parent, index, right, leaf);
+        else if (left != null && left.haveSpare()) rotateRight(parent, index, left, leaf);
+        else if (left != null) mergeWith(left, parent, index, leaf);
+        else if (right != null) right.mergeWith(this, parent, index + 1, leaf);
     }
 
     private boolean
@@ -48,9 +48,9 @@ public class Node<Key extends Comparable<Key>, Value> {
     }
 
     private void
-    mergeWith(Node<Key, Value> other, Node<Key, Value> parent, int index) {
-        children.mergeWith(other.children);
-        parent.children.remove(index);
+    mergeWith(Node<Key, Value> other, Node<Key, Value> parent, int index, boolean leaf) {
+        children.mergeWith(other.children, leaf);
+        parent.children.remove(index, false);
     }
 
     public Map<Key, Value>
@@ -107,7 +107,7 @@ public class Node<Key extends Comparable<Key>, Value> {
         Result<Key, Value> result;
         if (height == 0) result = insertLeaf(key, value);
         else result = insertNode(key, value, height);
-        if (result.inserted && children.size() >= children.length()) return result.node(split());
+        if (result.inserted && children.size() >= children.length()) return result.node(split(height == 0));
         else return result.node(null);
     }
 
@@ -186,7 +186,7 @@ public class Node<Key extends Comparable<Key>, Value> {
 
         final int child = children.equal(key);
         if (child < 0) return false;
-        children.remove(child);
+        children.remove(child, true);
         return true;
     }
 
@@ -195,39 +195,39 @@ public class Node<Key extends Comparable<Key>, Value> {
         int node = children.greaterThan(key) - 1;
         if (node >= children.size()) return false;
         final boolean removed = children.getLink(node).removeBy(key, this, node, height - 1);
-        if (deficient()) balance(parent, index);
+        if (deficient()) balance(parent, index, false);
         return removed;
     }
 
     private boolean
     removeLeaf(Key key, Node<Key, Value> parent, int index) {
         final boolean removed = removeBy(key);
-        if (deficient()) balance(parent, index);
+        if (deficient()) balance(parent, index, true);
         return removed;
     }
 
     private void
-    removeMin() {
-        children.remove(0);
+    removeMin(boolean leaf) {
+        children.remove(0, leaf);
     }
 
     private void
-    removeMax() {
-        children.remove(children.size() - 1);
+    removeMax(boolean leaf) {
+        children.remove(children.size() - 1, leaf);
     }
 
     private void
-    rotateLeft(Node<Key, Value> parent, int index, Node<Key, Value> right) {
-        children.insertMin(right.children);
+    rotateLeft(Node<Key, Value> parent, int index, Node<Key, Value> right, boolean leaf) {
+        children.insertMinFrom(right.children, leaf);
         parent.children.replaceInternal(index + 1, right.getRank(1), right);
-        right.removeMin();
+        right.removeMin(leaf);
     }
 
     private void
-    rotateRight(Node<Key, Value> parent, int index, Node<Key, Value> left) {
-        children.insertMax(0, left.children);
+    rotateRight(Node<Key, Value> parent, int index, Node<Key, Value> left, boolean leaf) {
+        children.insertMaxFrom(0, left.children, leaf);
         parent.children.replaceInternal(index, left.children.getMaxKey(), this);
-        left.removeMax();
+        left.removeMax(leaf);
     }
 
     private Node<Key, Value>

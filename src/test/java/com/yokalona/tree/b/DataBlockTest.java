@@ -22,7 +22,7 @@ class DataBlockTest {
         assertEquals(10, dataBlock.length());
 
         for (int sample = 0; sample < 10; sample++) {
-            dataBlock.insert(new Leaf<>(sample, sample, null, true));
+            dataBlock.insertExternal(sample, sample, sample);
             assertTrue(dataBlock.isOrdered());
             dataBlock.checkConsistency();
         }
@@ -34,7 +34,7 @@ class DataBlockTest {
     @Test
     public void testFind() {
         DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10);
-        for (int sample = 0; sample < 10; sample++) dataBlock.insert(new Leaf<>(sample, sample, null, true));
+        for (int sample = 0; sample < 10; sample++) dataBlock.insertExternal(sample, sample, sample);
         assertEquals(10, dataBlock.size());
         assertTrue(dataBlock.isOrdered());
         for (int sample = 0; sample < 10; sample++) assertEquals(sample, dataBlock.equal(sample));
@@ -44,7 +44,7 @@ class DataBlockTest {
         for (int sample = 10; sample < 20; sample++) assertEquals(- 11, dataBlock.equal(sample));
         for (int sample = - 1; sample > - 11; sample--) assertEquals(- 1, dataBlock.equal(sample));
 
-        dataBlock.remove(5);
+        dataBlock.remove(5, true);
         assertEquals(5, dataBlock.equal(6));
     }
 
@@ -52,10 +52,10 @@ class DataBlockTest {
     @SuppressWarnings("unchecked")
     public void testLoad() throws FileNotFoundException {
         DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10);
-        dataBlock.insert(new Leaf<>(0, 0, new Node<>(10), false));
-        dataBlock.insert(new Leaf<>(1, 1, new Node<>(10), false));
-        dataBlock.insert(new Leaf<>(2, 2, new Node<>(10), false));
-        dataBlock.insert(new Leaf<>(5, 5, new Node<>(10), false));
+        dataBlock.insertExternal(0, 0, 0);
+        dataBlock.insertExternal(1, 1, 1);
+        dataBlock.insertExternal(2, 2, 2);
+        dataBlock.insertExternal(3, 5, 5);
 
         Loader<Integer, Integer> loader = new Loader<>("test", 10);
         try (Output output = new Output(new FileOutputStream(fileName))) {
@@ -69,10 +69,10 @@ class DataBlockTest {
             dataBlock = loader.kryo().readObject(input, DataBlock.class);
             assertNotNull(dataBlock);
             dataBlock.check();
-            assertEquals(0, dataBlock.get(0).key());
-            assertEquals(1, dataBlock.get(1).key());
-            assertEquals(2, dataBlock.get(2).key());
-            assertEquals(5, dataBlock.get(3).key());
+            assertEquals(0, dataBlock.getKey(0));
+            assertEquals(1, dataBlock.getKey(1));
+            assertEquals(2, dataBlock.getKey(2));
+            assertEquals(5, dataBlock.getKey(3));
         }
     }
 
