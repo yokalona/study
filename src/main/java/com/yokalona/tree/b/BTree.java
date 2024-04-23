@@ -2,12 +2,7 @@ package com.yokalona.tree.b;
 
 import com.yokalona.tree.Tree;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.Queue;
+import java.util.*;
 
 import static com.yokalona.Validations.CAPACITY_SHOULD_BE_EVEN;
 import static com.yokalona.Validations.CAPACITY_SHOULD_BE_GREATER_THAN_2;
@@ -36,7 +31,7 @@ public class BTree<Key extends Comparable<Key>, Value>
     public Value
     get(final Key key) {
         validateKey(key);
-        final Leaf<?, Value> leaf = root.get.by(key, height);
+        final Leaf<?, Value> leaf = root.getBy(key, height);
         if (leaf == null) return null;
         return leaf.value;
     }
@@ -45,21 +40,21 @@ public class BTree<Key extends Comparable<Key>, Value>
     public boolean
     contains(final Key key) {
         validateKey(key);
-        return root.get.by(key, height) != null;
+        return root.getBy(key, height) != null;
     }
 
     @Override
     public boolean
     insert(final Key key, final Value value) {
         validateKey(key);
-        Node.Insert.Result<Key, Value> result = root.insert.by(key, value, height);
+        Node.Result<Key, Value> result = root.insertBy(key, value, height);
         assert isBTree();
-        if (!result.inserted) return false;
+        if (! result.inserted) return false;
         size++;
         if (result.node == null) return true;
         final Node<Key, Value> split = new Node<>(capacity);
-        split.children.insert(Leaf.internal(root.get.min().key, root));
-        split.children.insert(Leaf.internal(result.node.get.min().key, result.node));
+        split.children.insert(Leaf.internal(root.getMin().key, root));
+        split.children.insert(Leaf.internal(result.node.getMin().key, result.node));
         root = split;
         height++;
         return true;
@@ -69,12 +64,12 @@ public class BTree<Key extends Comparable<Key>, Value>
     public boolean
     remove(final Key key) {
         validateKey(key);
-        boolean removed = root.remove.by(key, height);
+        boolean removed = root.removeBy(key, height);
         assert isBTree();
-        if (!removed) return false;
+        if (! removed) return false;
         size--;
-        if (root.children.size() == 1 && root.get.min().link != null) {
-            root = root.get.min().link;
+        if (root.children.size() == 1 && root.getMin().link != null) {
+            root = root.getMin().link;
             height--;
         }
         return true;
@@ -104,16 +99,16 @@ public class BTree<Key extends Comparable<Key>, Value>
     min() {
         if (root.children.size() == 0) return null;
         Node<Key, Value> node = root;
-        while (node.get.min().link != null) node = node.get.min().link;
-        return Entry.fromLeaf(node.get.min());
+        while (node.getMin().link != null) node = node.getMin().link;
+        return Entry.fromLeaf(node.getMin());
     }
 
     public Entry<Key, Value>
     max() {
         if (root.children.size() == 0) return null;
         Node<Key, Value> node = root;
-        while (node.get.max().link != null) node = node.get.max().link;
-        return Entry.fromLeaf(node.get.max());
+        while (node.getMax().link != null) node = node.getMax().link;
+        return Entry.fromLeaf(node.getMax());
     }
 
     @Override
@@ -123,7 +118,7 @@ public class BTree<Key extends Comparable<Key>, Value>
         Queue<Node<Key, Value>> nodes = new LinkedList<>();
         if (root == null) return Collections.emptyIterator();
         nodes.offer(root);
-        while (!nodes.isEmpty()) {
+        while (! nodes.isEmpty()) {
             if (height == 0) break;
             int size = nodes.size();
             for (int level = 0; level < size; level++) {
@@ -149,7 +144,7 @@ public class BTree<Key extends Comparable<Key>, Value>
         Queue<Node<?, ?>> nodes = new LinkedList<>();
         nodes.offer(root);
         int height = 0;
-        while (!nodes.isEmpty()) {
+        while (! nodes.isEmpty()) {
             int size = nodes.size();
             for (int i = 0; i < size; i++) {
                 Node<?, ?> node = nodes.poll();
@@ -175,19 +170,13 @@ public class BTree<Key extends Comparable<Key>, Value>
     private static class Node<Key extends Comparable<Key>, Value> {
         private final DataBlock<Key, Value, Leaf<Key, Value>> children;
 
-        private final Get get = new Get();
-        private final Rotate rotate = new Rotate();
-        private final Insert insert = new Insert();
-        private final Remove remove = new Remove();
-        private final Sibling sibling = new Sibling();
-
         @SuppressWarnings("unchecked")
         private Node(final int capacity) {
             assert capacity > 2 : CAPACITY_SHOULD_BE_GREATER_THAN_2;
             assert capacity % 2 == 0 : CAPACITY_SHOULD_BE_EVEN;
 
             Leaf<Key, Value> dummy = new Leaf<>(null, null, null);
-            this.children = (DataBlock<Key, Value, Leaf<Key,Value>>) new DataBlock<>(capacity, dummy.getClass());
+            this.children = (DataBlock<Key, Value, Leaf<Key, Value>>) new DataBlock<>(capacity, dummy.getClass());
         }
 
         private Node<Key, Value>
@@ -199,10 +188,10 @@ public class BTree<Key extends Comparable<Key>, Value>
 
         private void
         balance(final Node<Key, Value> parent, final int index) {
-            final Node<Key, Value> left = sibling.left(parent, index);
-            final Node<Key, Value> right = sibling.right(parent, index);
-            if (right != null && right.haveSpare()) rotate.left(parent, index, right);
-            else if (left != null && left.haveSpare()) rotate.right(parent, index, left);
+            final Node<Key, Value> left = leftSibling(parent, index);
+            final Node<Key, Value> right = rightSibling(parent, index);
+            if (right != null && right.haveSpare()) rotateLeft(parent, index, right);
+            else if (left != null && left.haveSpare()) rotateRight(parent, index, left);
             else if (left != null) mergeWith(left, parent, index);
             else if (right != null) right.mergeWith(this, parent, index + 1);
         }
@@ -232,205 +221,200 @@ public class BTree<Key extends Comparable<Key>, Value>
             return map;
         }
 
-        private class Get {
+        public Leaf<?, Value>
+        getBy(final Key key, int height) {
+            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
+            assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
 
-            public Leaf<?, Value>
-            by(final Key key, int height) {
-                assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-                assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
-
-                Node<Key, Value> next = Node.this;
-                while (height > 0) {
-                    int node = next.children.greaterThan(key) - 1;
-                    next = next.children.get(node).link;
-                    height --;
-                }
-                final int child = next.children.equal(key);
-                if (child < 0 || child >= next.children.size()) return null;
-                else return next.children.get(child);
+            Node<Key, Value> next = this;
+            while (height > 0) {
+                int node = next.children.greaterThan(key) - 1;
+                next = next.children.get(node).link;
+                height--;
             }
-
-            public Leaf<Key, Value>
-            min() {
-                assert children.size() > 0 : EMPTY_NODE;
-
-                return children.get(0);
-            }
-
-            public Leaf<Key, Value>
-            max() {
-                assert children.size() > 0 : EMPTY_NODE;
-
-                return children.get(children.size() - 1);
-            }
-
-            public Leaf<Key, Value>
-            rank(int rank) {
-                assert rank >= 0 && rank < children.size() : EXCEEDING_CAPACITY;
-
-                return children.get(rank);
-            }
-
+            final int child = next.children.equal(key);
+            if (child < 0 || child >= next.children.size()) return null;
+            else return next.children.get(child);
         }
 
-        private class Insert {
+        public Leaf<Key, Value>
+        getMin() {
+            assert children.size() > 0 : EMPTY_NODE;
 
-            public Result<Key, Value>
-            by(final Key key, final Value value, final int height) {
-                assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-                assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
+            return children.get(0);
+        }
 
-                Result<Key, Value> result;
-                if (height == 0) result = leaf(key, value);
-                else result = node(key, value, height);
-                if (result.inserted && children.size() >= children.length()) return result.node(split());
-                else return result.node(null);
+        public Leaf<Key, Value>
+        getMax() {
+            assert children.size() > 0 : EMPTY_NODE;
+
+            return children.get(children.size() - 1);
+        }
+
+        public Leaf<Key, Value>
+        getRank(int rank) {
+            assert rank >= 0 && rank < children.size() : EXCEEDING_CAPACITY;
+
+            return children.get(rank);
+        }
+
+        public Result<Key, Value>
+        insertBy(final Key key, final Value value, int height) {
+            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
+            assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
+
+            Result<Key, Value> result;
+            if (height == 0) result = insertLeaf(key, value);
+            else result = insertNode(key, value, height);
+            if (result.inserted && children.size() >= children.length()) return result.node(split());
+            else return result.node(null);
+        }
+
+        private Result<Key, Value>
+        insertLeaf(final Key key, final Value value) {
+            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
+
+            int child = children.equal(key);
+            if (child < 0) {
+                children.insert(- child - 1, Leaf.external(key, value));
+                return new Result<>(true);
+            } else {
+                children.replace(child, Leaf.external(key, value));
+                return new Result<>(false);
+            }
+        }
+
+        private Result<Key, Value>
+        insertNode(final Key key, final Value value, final int height) {
+            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
+            assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
+
+            int node = children.greaterThan(key) - 1;
+            if (node < 0) node = 0;
+            final Result<Key, Value> result = children.get(node).link.insertBy(key, value, height - 1);
+            if (result.inserted && result.node != null) {
+                children.replace(node, Leaf.internal(children.get(node).link.getMin().key, children.get(node).link));
+                children.insert(node + 1, Leaf.internal(result.node.getMin().key, result.node));
+            }
+            return result.node(null);
+        }
+
+
+        private static class Result<Key extends Comparable<Key>, Value> {
+            private final boolean inserted;
+            private Node<Key, Value> node;
+
+            private Result(boolean inserted) {
+                this.inserted = inserted;
             }
 
             private Result<Key, Value>
-            leaf(final Key key, final Value value) {
-                assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-
-                int child = children.equal(key);
-                if (child < 0) {
-                    children.insert(-child - 1, Leaf.external(key, value));
-                    return new Result<>(true);
-                } else {
-                    children.replace(child, Leaf.external(key, value));
-                    return new Result<>(false);
-                }
-            }
-
-            private Result<Key, Value>
-            node(final Key key, final Value value, final int height) {
-                assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-                assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
-
-                int node = children.greaterThan(key) - 1;
-                if (node < 0) node = 0;
-                final Result<Key, Value> result = children.get(node).link.insert.by(key, value, height - 1);
-                if (result.inserted && result.node != null) {
-                    children.replace(node, Leaf.internal(children.get(node).link.get.min().key, children.get(node).link));
-                    children.insert(node + 1, Leaf.internal(result.node.get.min().key, result.node));
-                }
-                return result.node(null);
-            }
-
-
-            private static class Result<Key extends Comparable<Key>, Value> {
-                private final boolean inserted;
-                private Node<Key, Value> node;
-
-                private Result(boolean inserted) {
-                    this.inserted = inserted;
-                }
-
-                private Result<Key, Value>
-                node(Node<Key, Value> node) {
-                    this.node = node;
-                    return this;
-                }
+            node(Node<Key, Value> node) {
+                this.node = node;
+                return this;
             }
         }
 
-        private class Remove {
-
-            public boolean
-            by(final Key key, final int height) {
-                return by(key, null, -1, height);
-            }
-
-            private boolean
-            by(final Key key, final Node<Key, Value> parent, final int index, final int height) {
-                assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-                assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
-
-                if (height == 0) return leaf(key, parent, index);
-                else return node(key, parent, index, height);
-            }
-
-            private boolean
-            by(final Key key) {
-                assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-
-                final int child = children.equal(key);
-                if (child < 0) return false;
-                children.remove(child);
-                return true;
-            }
-
-            private boolean
-            node(Key key, Node<Key, Value> parent, int index, int height) {
-                int node = children.greaterThan(key) - 1;
-                if (node >= children.size()) return false;
-                final boolean removed = children.get(node).link.remove.by(key, Node.this, node, height - 1);
-                if (deficient()) balance(parent, index);
-                return removed;
-            }
-
-            private boolean
-            leaf(Key key, Node<Key, Value> parent, int index) {
-                final boolean removed = remove.by(key);
-                if (deficient()) balance(parent, index);
-                return removed;
-            }
-
-            private void
-            min() {
-                children.remove(0);
-            }
-
-            private void
-            max() {
-                children.remove(children.size() - 1);
-            }
-
+        public boolean
+        removeBy(final Key key, final int height) {
+            return removeBy(key, null, - 1, height);
         }
 
-        private class Rotate {
-            private void
-            left(Node<Key, Value> parent, int index, Node<Key, Value> right) {
-                children.insert(right.get.min());
-                parent.children.replace(index + 1, Leaf.internal(right.get.rank(1).key, right));
-                right.remove.min();
-            }
+        private boolean
+        removeBy(final Key key, final Node<Key, Value> parent, final int index, final int height) {
+            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
+            assert height >= 0 : HEIGHT_CAN_NOT_BE_NEGATIVE;
 
-            private void
-            right(Node<Key, Value> parent, int index, Node<Key, Value> left) {
-                children.insert(0, left.get.max());
-                parent.children.replace(index, Leaf.internal(left.get.max().key, Node.this));
-                left.remove.max();
-            }
+            if (height == 0) return removeLeaf(key, parent, index);
+            else return removeNode(key, parent, index, height);
         }
 
-        private class Sibling {
-            private Node<Key, Value>
-            left(final Node<Key, Value> parent, final int index) {
-                if (parent != null && index > 0) return parent.children.get(index - 1).link;
-                return null;
-            }
-            private Node<Key, Value>
-            right(final Node<Key, Value> parent, final int index) {
-                if (parent != null && index < parent.children.size() - 1) return parent.children.get(index + 1).link;
-                return null;
-            }
+        private boolean
+        removeBy(final Key key) {
+            assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
+
+            final int child = children.equal(key);
+            if (child < 0) return false;
+            children.remove(child);
+            return true;
+        }
+
+        private boolean
+        removeNode(Key key, Node<Key, Value> parent, int index, int height) {
+            int node = children.greaterThan(key) - 1;
+            if (node >= children.size()) return false;
+            final boolean removed = children.get(node).link.removeBy(key, this, node, height - 1);
+            if (deficient()) balance(parent, index);
+            return removed;
+        }
+
+        private boolean
+        removeLeaf(Key key, Node<Key, Value> parent, int index) {
+            final boolean removed = removeBy(key);
+            if (deficient()) balance(parent, index);
+            return removed;
+        }
+
+        private void
+        removeMin() {
+            children.remove(0);
+        }
+
+        private void
+        removeMax() {
+            children.remove(children.size() - 1);
+        }
+
+        private void
+        rotateLeft(Node<Key, Value> parent, int index, Node<Key, Value> right) {
+            children.insert(right.getMin());
+            parent.children.replace(index + 1, Leaf.internal(right.getRank(1).key, right));
+            right.removeMin();
+        }
+
+        private void
+        rotateRight(Node<Key, Value> parent, int index, Node<Key, Value> left) {
+            children.insert(0, left.getMax());
+            parent.children.replace(index, Leaf.internal(left.getMax().key, this));
+            left.removeMax();
+        }
+
+        private Node<Key, Value>
+        leftSibling(final Node<Key, Value> parent, final int index) {
+            if (parent != null && index > 0) return parent.children.get(index - 1).link;
+            return null;
+        }
+
+        private Node<Key, Value>
+        rightSibling(final Node<Key, Value> parent, final int index) {
+            if (parent != null && index < parent.children.size() - 1) return parent.children.get(index + 1).link;
+            return null;
         }
     }
 
     private record Leaf<Key extends Comparable<Key>, Value>(Key key, Value value, Node<Key, Value> link)
-            implements HasKey<Key>, HasValue<Value>, HasLink<Node<Key, Value>> {
+                implements HasKey<Key>, HasValue<Value>, HasLink<Node<Key, Value>> {
 
         public static <Key extends Comparable<Key>, Value> Leaf<Key, Value>
-        internal(Key key, Node<Key, Value> next) {
-            return new Leaf<>(key, null, next);
-        }
+            internal(Key key, Node<Key, Value> next) {
+                return new Leaf<>(key, null, next);
+            }
 
-        public static <Key extends Comparable<Key>, Value> Leaf<Key, Value>
-        external(Key key, Value value) {
-            return new Leaf<>(key, value, null);
-        }
+            public static <Key extends Comparable<Key>, Value> Leaf<Key, Value>
+            external(Key key, Value value) {
+                return new Leaf<>(key, value, null);
+            }
 
-    }
+        @Override
+            public String toString() {
+                return "Leaf[" +
+                        "key=" + key + ", " +
+                        "value=" + value + ", " +
+                        "link=" + link + ']';
+            }
+
+
+        }
 
     private record BlockIterator<Key extends Comparable<Key>, Value>
             (Iterator<Node<Key, Value>> underlying) implements Iterator<Map<Key, Value>> {
