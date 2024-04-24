@@ -1,5 +1,6 @@
 package com.yokalona.tree.b;
 
+import com.yokalona.Validations;
 import com.yokalona.tree.Tree;
 
 import java.util.*;
@@ -9,19 +10,15 @@ import static com.yokalona.Validations.validateKey;
 
 public class BTree<Key extends Comparable<Key>, Value>
         implements Tree<Key, Value>, Iterable<Map<Key, Value>> {
-    private static final String INDENT = "     ";
     private final int capacity;
     private Node<Key, Value> root;
     private int height = 0;
     private int size = 0;
 
-    private final transient Loader<Key, Value> loader;
-
     public BTree(final int capacity) {
         validateCapacity(capacity);
         this.capacity = capacity;
-        this.loader = new Loader<>("", capacity);
-        this.root = new Node<>(capacity, loader);
+        this.root = new Node<>(capacity, true);
     }
 
     @Override
@@ -47,7 +44,7 @@ public class BTree<Key extends Comparable<Key>, Value>
         if (! result.inserted()) return false;
         size++;
         if (result.node() == null) return true;
-        final Node<Key, Value> split = new Node<>(capacity, loader);
+        final Node<Key, Value> split = new Node<>(capacity, false);
         split.children().insertInternal(0, root.children().minKey(), root);
         split.children().insertInternal(1, result.node().children().minKey(), result.node());
         root = split;
@@ -87,7 +84,7 @@ public class BTree<Key extends Comparable<Key>, Value>
     clear() {
         size = 0;
         height = 0;
-        root = new Node<>(capacity, loader);
+        root = new Node<>(capacity, true);
     }
 
     public Entry<Key, Value>
@@ -119,9 +116,8 @@ public class BTree<Key extends Comparable<Key>, Value>
             for (int level = 0; level < size; level++) {
                 Node<Key, Value> node = nodes.poll();
                 if (node == null) continue;
-                for (Leaf<Key, Value> child : node.children()) {
-                    if (child == null) break;
-                    nodes.offer(child.link());
+                for (int child = 0; child < node.children().size(); child ++) {
+                    nodes.offer(node.children().link(child));
                 }
             }
             height--;
@@ -145,20 +141,19 @@ public class BTree<Key extends Comparable<Key>, Value>
                 Node<?, ?> node = nodes.poll();
                 assert node != null;
                 assert node.children().check();
-                for (Leaf<?, ?> leaf : node.children()) {
-                    assert leaf.key() != null;
-                    if (height != height()) {
-                        assert leaf.value() == null;
-                        assert leaf.link() != null;
-                        nodes.add(leaf.link());
+                for (int child = 0; child < node.children().size(); child ++) {
+                    assert node.children().contains(child);
+                    if (node.leaf()) {
+                        assert node.children().value(child) != null;
                     } else {
-                        assert leaf.link() == null;
-                        assert leaf.value() != null;
+                        assert node.children().link(child) != null;
+                        nodes.add(node.children().link(child));
                     }
                 }
             }
             height++;
         }
+        assert height == height() + 1;
         return true;
     }
 
@@ -181,23 +176,23 @@ public class BTree<Key extends Comparable<Key>, Value>
 
     public String
     toString() {
-        return toString(root, height, "") + "\n";
+        return toString(root, "") + "\n";
     }
 
     private String
-    toString(Node<?, ?> node, int height, String indent) {
+    toString(Node<?, ?> node, String indent) {
         StringBuilder sb = new StringBuilder();
-        if (height == 0) printLeaf(node, indent, sb, node.children());
-        else printNode(node, height, indent, sb, node.children());
+        if (node.leaf()) printLeaf(node, indent, sb, node.children());
+        else printNode(node, indent, sb, node.children());
         return sb.toString();
     }
 
     private void
-    printNode(Node<?, ?> node, int height, String indent, StringBuilder sb, DataBlock<?, ?> children) {
+    printNode(Node<?, ?> node, String indent, StringBuilder sb, DataBlock<?, ?> children) {
         for (int child = 0; child < node.children().size(); child++) {
             if (child > 0 || node.children().size() == 1) sb.append(indent)
                     .append("(").append(children.key(child)).append(")\n");
-            sb.append(toString(children.link(child), height - 1, indent + INDENT));
+            sb.append(toString(children.link(child), indent + Validations.INDENT));
         }
     }
 

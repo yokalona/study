@@ -17,7 +17,7 @@ class DataBlockTest {
     @Test
     public void testInsert() {
         Loader<Integer, Integer> loader = new Loader<>(fileName, 10);
-        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, loader);
+        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, true);
         assertEquals(0, dataBlock.size());
         assertEquals(10, dataBlock.length());
 
@@ -34,7 +34,7 @@ class DataBlockTest {
     @Test
     public void testFind() {
         Loader<Integer, Integer> loader = new Loader<>(fileName, 10);
-        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, loader);
+        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, true);
         for (int sample = 0; sample < 10; sample++) dataBlock.insertExternal(sample, sample, sample);
         assertEquals(10, dataBlock.size());
         assertTrue(dataBlock.isOrdered());
@@ -45,7 +45,7 @@ class DataBlockTest {
         for (int sample = 10; sample < 20; sample++) assertEquals(- 11, dataBlock.equal(sample));
         for (int sample = - 1; sample > - 11; sample--) assertEquals(- 1, dataBlock.equal(sample));
 
-        dataBlock.remove(5, true);
+        dataBlock.remove(5);
         assertEquals(5, dataBlock.equal(6));
     }
 
@@ -53,7 +53,7 @@ class DataBlockTest {
     @SuppressWarnings("unchecked")
     public void testLoad() throws FileNotFoundException {
         Loader<Integer, Integer> loader = new Loader<>(fileName, 10);
-        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, loader);
+        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, true);
         dataBlock.insertExternal(0, 0, 0);
         dataBlock.insertExternal(1, 1, 1);
         dataBlock.insertExternal(2, 2, 2);

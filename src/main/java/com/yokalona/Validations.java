@@ -17,6 +17,7 @@ public class Validations {
     public static final String INCORRECT_COLORING = "Incorrect coloring";
     public static final String EXCEEDING_CAPACITY = "Exceeding capacity: ";
     public static final String EMPTY_NODE = "Node is empty";
+    public static final String INDENT = "     ";
 
 
     private Validations() {}

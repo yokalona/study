@@ -1,30 +1,24 @@
 package com.yokalona.tree.b;
 
 import java.util.*;
-import java.util.function.Consumer;
 
 import static com.yokalona.Validations.*;
 
-public class DataBlock<Key extends Comparable<Key>, Value>
-        implements Iterable<Leaf<Key, Value>> {
+public class DataBlock<Key extends Comparable<Key>, Value> {
     public static boolean ENABLE_CHECK = false;
-
-    private int size;
 
     private final Object[] keys;
     private final Object[] values;
-    private final Node<Key, Value>[] links;
+    private final boolean leaf;
 
-    private final transient Loader<Key, Value> loader;
+    private int size;
 
-    @SuppressWarnings("unchecked")
-    public DataBlock(int capacity, Loader<Key, Value> loader) {
+    public DataBlock(int capacity, boolean leaf) {
         assert capacity > 2 : CAPACITY_SHOULD_BE_GREATER_THAN_2;
 
-        this.loader = loader;
+        this.leaf = leaf;
         this.keys = new Object[capacity];
         this.values = new Object[capacity];
-        this.links = (Node<Key, Value>[]) new Node[capacity];
     }
 
     @SuppressWarnings("unchecked")
@@ -43,30 +37,28 @@ public class DataBlock<Key extends Comparable<Key>, Value>
         return key(size - 1);
     }
 
+    @SuppressWarnings("unchecked")
     public Node<Key, Value>
     link(int index) {
-        loader.loadNode(index);
-        return links[index];
-    }
+        assert !leaf;
 
-    private void
-    link(int index, Node<Key, Value> link) {
-        links[index] = link;
-        loader.flushNode(index);
+        return (Node<Key, Value>) values[index];
     }
 
     public Node<Key, Value>
     minLink() {
-        return link(0);
+        return leaf ? null : link(0);
     }
 
     public Node<Key, Value>
     maxLink() {
-        return link(size - 1);
+        return leaf ? null : link(size - 1);
     }
 
     public Entry<Key, Value>
     entry(int index) {
+        assert leaf;
+
         return new Entry<>(key(index), value(index));
     }
 
@@ -83,6 +75,8 @@ public class DataBlock<Key extends Comparable<Key>, Value>
     @SuppressWarnings("unchecked")
     public Value
     value(int index) {
+        assert leaf;
+
         return (Value) values[index];
     }
 
@@ -111,8 +105,6 @@ public class DataBlock<Key extends Comparable<Key>, Value>
 
     public void
     insertExternal(int index, Key key, Value value) {
-        assert value != null : "Null values are not permitted";
-
         insertKey(index, key);
         System.arraycopy(values, index, values, index + 1, size - index);
         values[index] = value;
@@ -126,15 +118,17 @@ public class DataBlock<Key extends Comparable<Key>, Value>
         assert link != null : NULL_LINK_IS_NOT_PERMITTED;
 
         insertKey(index, key);
-        System.arraycopy(links, index, links, index + 1, size - index);
-        link(index, link);
+        System.arraycopy(values, index, values, index + 1, size - index);
+        assert !leaf;
+
+        values[index] = link;
         size++;
 
         assert check();
     }
 
     public void
-    insertMinFrom(DataBlock<Key, Value> datablock, boolean leaf) {
+    insertMinFrom(DataBlock<Key, Value> datablock) {
         assert datablock != null : DATA_BLOCK_CANNOT_BE_NULL;
 
         if (leaf) insertExternal(size, datablock.minKey(), datablock.minValue());
@@ -144,7 +138,7 @@ public class DataBlock<Key extends Comparable<Key>, Value>
     }
 
     public void
-    insertMaxFrom(int index, DataBlock<Key, Value> datablock, boolean leaf) {
+    insertMaxFrom(int index, DataBlock<Key, Value> datablock) {
         assert datablock != null : DATA_BLOCK_CANNOT_BE_NULL;
 
         if (leaf) insertExternal(index, datablock.maxKey(), datablock.maxValue());
@@ -159,8 +153,9 @@ public class DataBlock<Key extends Comparable<Key>, Value>
         assert link != null : NULL_LINK_IS_NOT_PERMITTED;
 
         this.keys[index] = key;
-        link(index, link);
-        loader.flushNode(index);
+        assert !leaf;
+
+        values[index] = link;
 
         assert check();
     }
@@ -176,42 +171,28 @@ public class DataBlock<Key extends Comparable<Key>, Value>
     }
 
     public void
-    remove(int index, boolean leaf) {
+    remove(int index) {
         System.arraycopy(keys, index + 1, keys, index, size - index - 1);
-        if (leaf) {
-            System.arraycopy(values, index + 1, values, index, size - index - 1);
-            values[size - 1] = null;
-        } else {
-            System.arraycopy(links, index + 1, links, index, size - index - 1);
-            links[size - 1] = null;
-            loader.flushNodes();
-        }
+        System.arraycopy(values, index + 1, values, index, size - index - 1);
+        values[size - 1] = null;
         keys[-- size] = null;
 
         assert check();
     }
 
     public void
-    remove(int from, int to, boolean leaf) {
+    remove(int from, int to) {
         Arrays.fill(keys, from, to, null);
-        if (leaf) Arrays.fill(values, from, to, null);
-        else {
-            Arrays.fill(links, from, to, null);
-            loader.flushNodes();
-        }
+        Arrays.fill(values, from, to, null);
         size -= to - from;
 
         assert check();
     }
 
     private void
-    copyTo(DataBlock<Key, Value> other, int from, int to, int length, boolean leaf) {
+    copyTo(DataBlock<Key, Value> other, int from, int to, int length) {
         System.arraycopy(keys, from, other.keys, to, length);
-        if (leaf) System.arraycopy(values, from, other.values, to, length);
-        else {
-            System.arraycopy(links, from, other.links, to, length);
-            loader.flushNodes();
-        }
+        System.arraycopy(values, from, other.values, to, length);
         other.size += length;
 
         assert check();
@@ -219,17 +200,17 @@ public class DataBlock<Key extends Comparable<Key>, Value>
     }
 
     public void
-    splitWith(DataBlock<Key, Value> other, boolean leaf) {
-        copyTo(other, keys.length / 2, 0, keys.length / 2, leaf);
-        remove(keys.length / 2, keys.length, leaf);
+    splitWith(DataBlock<Key, Value> other) {
+        copyTo(other, keys.length / 2, 0, keys.length / 2);
+        remove(keys.length / 2, keys.length);
 
         assert check();
         assert other.check();
     }
 
     public void
-    mergeWith(DataBlock<Key, Value> other, boolean leaf) {
-        copyTo(other, 0, other.size, size, leaf);
+    mergeWith(DataBlock<Key, Value> other) {
+        copyTo(other, 0, other.size, size);
 
         assert check();
         assert other.check();
@@ -243,33 +224,6 @@ public class DataBlock<Key extends Comparable<Key>, Value>
     public int
     size() {
         return this.size;
-    }
-
-    private List<Leaf<Key, Value>> formList() {
-        List<Leaf<Key, Value>> list = new ArrayList<>();
-        for (int leaf = 0; leaf < size; leaf++) {
-            list.add(new Leaf<>(key(leaf), value(leaf), link(leaf)));
-        }
-        return list;
-    }
-
-    @Override
-    public Iterator<Leaf<Key, Value>>
-    iterator() {
-        List<Leaf<Key, Value>> list = formList();
-        return list.iterator();
-    }
-
-    @Override
-    public void
-    forEach(Consumer<? super Leaf<Key, Value>> action) {
-        Iterable.super.forEach(action);
-    }
-
-    @Override
-    public Spliterator<Leaf<Key, Value>>
-    spliterator() {
-        return formList().spliterator();
     }
 
     boolean
