@@ -22,7 +22,7 @@ class DataBlockTest {
         assertEquals(10, dataBlock.length());
 
         for (int sample = 0; sample < 10; sample++) {
-            dataBlock.insertExternal(sample, sample, sample);
+            dataBlock.insert(sample, sample, sample);
             assertTrue(dataBlock.isOrdered());
             dataBlock.checkConsistency();
         }
@@ -35,7 +35,7 @@ class DataBlockTest {
     public void testFind() {
         Loader<Integer, Integer> loader = new Loader<>(fileName, 10);
         DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, true);
-        for (int sample = 0; sample < 10; sample++) dataBlock.insertExternal(sample, sample, sample);
+        for (int sample = 0; sample < 10; sample++) dataBlock.insert(sample, sample, sample);
         assertEquals(10, dataBlock.size());
         assertTrue(dataBlock.isOrdered());
         for (int sample = 0; sample < 10; sample++) assertEquals(sample, dataBlock.equal(sample));
@@ -54,10 +54,10 @@ class DataBlockTest {
     public void testLoad() throws FileNotFoundException {
         Loader<Integer, Integer> loader = new Loader<>(fileName, 10);
         DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, true);
-        dataBlock.insertExternal(0, 0, 0);
-        dataBlock.insertExternal(1, 1, 1);
-        dataBlock.insertExternal(2, 2, 2);
-        dataBlock.insertExternal(3, 5, 5);
+        dataBlock.insert(0, 0, 0);
+        dataBlock.insert(1, 1, 1);
+        dataBlock.insert(2, 2, 2);
+        dataBlock.insert(3, 5, 5);
 
         try (Output output = new Output(new FileOutputStream(fileName))) {
             loader.kryo().writeObject(output, dataBlock);

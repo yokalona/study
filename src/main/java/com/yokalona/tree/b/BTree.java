@@ -45,8 +45,8 @@ public class BTree<Key extends Comparable<Key>, Value>
         size++;
         if (result.node() == null) return true;
         final Node<Key, Value> split = new Node<>(capacity, false);
-        split.children().insertInternal(0, root.children().minKey(), root);
-        split.children().insertInternal(1, result.node().children().minKey(), result.node());
+        split.children().insert(0, root.children().minKey(), root);
+        split.children().insert(1, result.node().children().minKey(), result.node());
         root = split;
         height++;
         return true;

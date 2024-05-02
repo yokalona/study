@@ -1,8 +1,11 @@
 package com.yokalona.tree.b;
 
-import java.util.*;
+import java.lang.ref.SoftReference;
+import java.util.Arrays;
 
-import static com.yokalona.Validations.*;
+import static com.yokalona.Validations.CAPACITY_SHOULD_BE_GREATER_THAN_2;
+import static com.yokalona.Validations.DATA_BLOCK_CANNOT_BE_NULL;
+import static com.yokalona.Validations.KEY_SHOULD_HAVE_NON_NULL_VALUE;
 
 public class DataBlock<Key extends Comparable<Key>, Value> {
     public static boolean ENABLE_CHECK = false;
@@ -40,7 +43,7 @@ public class DataBlock<Key extends Comparable<Key>, Value> {
     @SuppressWarnings("unchecked")
     public Node<Key, Value>
     link(int index) {
-        assert !leaf;
+        assert ! leaf;
 
         return (Node<Key, Value>) values[index];
     }
@@ -104,24 +107,11 @@ public class DataBlock<Key extends Comparable<Key>, Value> {
     }
 
     public void
-    insertExternal(int index, Key key, Value value) {
+    insert(int index, Key key, Object value) {
         insertKey(index, key);
+
         System.arraycopy(values, index, values, index + 1, size - index);
         values[index] = value;
-        size++;
-
-        assert check();
-    }
-
-    public void
-    insertInternal(int index, Key key, Node<Key, Value> link) {
-        assert link != null : NULL_LINK_IS_NOT_PERMITTED;
-
-        insertKey(index, key);
-        System.arraycopy(values, index, values, index + 1, size - index);
-        assert !leaf;
-
-        values[index] = link;
         size++;
 
         assert check();
@@ -131,8 +121,8 @@ public class DataBlock<Key extends Comparable<Key>, Value> {
     insertMinFrom(DataBlock<Key, Value> datablock) {
         assert datablock != null : DATA_BLOCK_CANNOT_BE_NULL;
 
-        if (leaf) insertExternal(size, datablock.minKey(), datablock.minValue());
-        else insertInternal(size, datablock.minKey(), datablock.minLink());
+        if (leaf) insert(size, datablock.minKey(), datablock.minValue());
+        else insert(size, datablock.minKey(), datablock.minLink());
 
         assert check();
     }
@@ -141,31 +131,18 @@ public class DataBlock<Key extends Comparable<Key>, Value> {
     insertMaxFrom(int index, DataBlock<Key, Value> datablock) {
         assert datablock != null : DATA_BLOCK_CANNOT_BE_NULL;
 
-        if (leaf) insertExternal(index, datablock.maxKey(), datablock.maxValue());
-        else insertInternal(index, datablock.maxKey(), datablock.maxLink());
+        if (leaf) insert(index, datablock.maxKey(), datablock.maxValue());
+        else insert(index, datablock.maxKey(), datablock.maxLink());
 
         assert check();
     }
 
     public void
-    replaceInternal(int index, Key key, Node<Key, Value> link) {
-        assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
-        assert link != null : NULL_LINK_IS_NOT_PERMITTED;
-
-        this.keys[index] = key;
-        assert !leaf;
-
-        values[index] = link;
-
-        assert check();
-    }
-
-    public void
-    replaceExternal(int index, Key key, Value value) {
+    replace(int index, Key key, Object value) {
         assert key != null : KEY_SHOULD_HAVE_NON_NULL_VALUE;
 
         this.keys[index] = key;
-        this.values[index] = value;
+        values[index] = value;
 
         assert check();
     }
@@ -228,7 +205,14 @@ public class DataBlock<Key extends Comparable<Key>, Value> {
 
     boolean
     check() {
-        assert ! ENABLE_CHECK || (checkConsistency() && isOrdered());
+        assert ! ENABLE_CHECK || (checkConsistency() && isOrdered() && checkTypeConsistency());
+        return true;
+    }
+
+    private boolean checkTypeConsistency() {
+        for (int point = 0; point < size; point ++)
+            if (leaf) assert !(values[point] instanceof Node<?, ?>);
+                    else assert values[point] instanceof Node<?,?>;
         return true;
     }
 

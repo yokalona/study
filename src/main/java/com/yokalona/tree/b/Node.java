@@ -124,10 +124,10 @@ public class Node<Key extends Comparable<Key>, Value> {
 
         int child = children.equal(key);
         if (child < 0) {
-            children.insertExternal(- child - 1, key, value);
+            children.insert(- child - 1, key, value);
             return new Result<>(true);
         } else {
-            children.replaceExternal(child, key, value);
+            children.replace(child, key, value);
             return new Result<>(false);
         }
     }
@@ -141,8 +141,8 @@ public class Node<Key extends Comparable<Key>, Value> {
         if (node < 0) node = 0;
         final Result<Key, Value> result = children.link(node).insertBy(key, value, height - 1);
         if (result.inserted && result.node != null) {
-            children.replaceInternal(node, children.link(node).children().minKey(), children.link(node));
-            children.insertInternal(node + 1, result.node.children().minKey(), result.node);
+            children.replace(node, children.link(node).children().minKey(), children.link(node));
+            children.insert(node + 1, result.node.children().minKey(), result.node);
         }
         return result.node(null);
     }
@@ -226,14 +226,14 @@ public class Node<Key extends Comparable<Key>, Value> {
     private void
     rotateLeft(Node<Key, Value> parent, int index, Node<Key, Value> right) {
         children.insertMinFrom(right.children);
-        parent.children.replaceInternal(index + 1, right.getRank(1), right);
+        parent.children.replace(index + 1, right.getRank(1), right);
         right.removeMin();
     }
 
     private void
     rotateRight(Node<Key, Value> parent, int index, Node<Key, Value> left) {
         children.insertMaxFrom(0, left.children);
-        parent.children.replaceInternal(index, left.children.maxKey(), this);
+        parent.children.replace(index, left.children.maxKey(), this);
         left.removeMax();
     }
 
