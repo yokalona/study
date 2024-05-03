@@ -17,14 +17,7 @@ public class LazyArray<Type> implements Iterable<Type> {
     private final BitSet loaded;
     final FileConfiguration file;
 
-    /**
-     * Version mark, represented as 4-byte word.
-     * 0-byte - critical version, no backward and no forward compatibility
-     * 1-byte - major version, forward compatible changes only
-     * 2-byte - minor version, backward and forward compatible changes
-     * 3-byte - type of data array:
-     *   0 - general lazy array represented as separated offset array and data storage container
-     */
+
     // TODO: DECADAFACADA
     private static final byte[] VERSION = new byte[] { 0x00, 0x01, 0x00, 0x00 };
 

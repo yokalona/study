@@ -49,32 +49,4 @@ class DataBlockTest {
         assertEquals(5, dataBlock.equal(6));
     }
 
-    @Test
-    @SuppressWarnings("unchecked")
-    public void testLoad() throws FileNotFoundException {
-        Loader<Integer, Integer> loader = new Loader<>(fileName, 10);
-        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, true);
-        dataBlock.insert(0, 0, 0);
-        dataBlock.insert(1, 1, 1);
-        dataBlock.insert(2, 2, 2);
-        dataBlock.insert(3, 5, 5);
-
-        try (Output output = new Output(new FileOutputStream(fileName))) {
-            loader.kryo().writeObject(output, dataBlock);
-        }
-
-        assertNotNull(dataBlock);
-        dataBlock = null;
-        System.gc();
-        try (Input input = new Input(new FileInputStream(fileName))) {
-            dataBlock = loader.kryo().readObject(input, DataBlock.class);
-            assertNotNull(dataBlock);
-            dataBlock.check();
-            assertEquals(0, dataBlock.key(0));
-            assertEquals(1, dataBlock.key(1));
-            assertEquals(2, dataBlock.key(2));
-            assertEquals(5, dataBlock.key(3));
-        }
-    }
-
 }

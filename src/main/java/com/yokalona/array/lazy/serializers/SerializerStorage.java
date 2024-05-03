@@ -1,12 +1,11 @@
 package com.yokalona.array.lazy.serializers;
 
 import java.util.HashMap;
-import java.util.Map;
 
 public class SerializerStorage {
 
     private static final HashMap<Class<?>, Serializer<?>> map = new HashMap<>() {{
-        put(Integer.class, IntegerSerializer.INSTANCE);
+        put(Integer.class, IntegerSerializer.get);
         put(Long.class, LongSerializer.INSTANCE);
     }};
 
