@@ -8,7 +8,7 @@ public class LongSerializer implements Serializer<Long> {
 
     @Override
     public byte[] serialize(Long value) {
-        byte[] bytes = new byte[sizeOf()];
+        byte[] bytes = new byte[descriptor().size()];
         if (value == null) {
             bytes[0] = 0xF;
             return bytes;
@@ -30,14 +30,15 @@ public class LongSerializer implements Serializer<Long> {
     public Long deserialize(byte[] bytes, int offset) {
         if (bytes[offset] == 0xF) return null;
         long value = 0;
-        for (int index = offset; index < offset + sizeOf(); index ++) {
+        for (int index = offset; index < offset + descriptor().size(); index ++) {
             value = (value << 8) + (bytes[index] & 0xFF);
         }
         return value;
     }
 
     @Override
-    public int sizeOf() {
-        return Long.BYTES + 1;
+    public TypeDescriptor<Long> descriptor() {
+        return null;
     }
+
 }

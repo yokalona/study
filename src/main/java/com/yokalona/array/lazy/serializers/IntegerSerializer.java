@@ -1,14 +1,10 @@
 package com.yokalona.array.lazy.serializers;
 
-public class IntegerSerializer implements Serializer<Integer> {
-
-    public static final Serializer<Integer> get = new IntegerSerializer();
-
-    private IntegerSerializer() {}
+public record IntegerSerializer(TypeDescriptor<Integer> descriptor) implements Serializer<Integer> {
 
     @Override
     public byte[] serialize(Integer value) {
-        byte[] bytes = new byte[sizeOf()];
+        byte[] bytes = new byte[descriptor.size()];
         if (value == null) {
             bytes[0] = 0xF;
             return bytes;
@@ -30,14 +26,10 @@ public class IntegerSerializer implements Serializer<Integer> {
     public Integer deserialize(byte[] bytes, int offset) {
         if (bytes[offset] == 0xF) return null;
         int value = 0;
-        for (int index = offset + 1; index < offset + sizeOf(); index ++) {
+        for (int index = offset + 1; index < offset + descriptor.size(); index ++) {
             value = (value << 8) + (bytes[index] & 0xFF);
         }
         return value;
     }
 
-    @Override
-    public int sizeOf() {
-        return Integer.BYTES + 1;
-    }
 }

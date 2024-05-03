@@ -50,7 +50,7 @@ public record Configuration(File file, Chunked read, Chunked write) {
     public record Chunked(boolean chunked, int size) {
         public static Chunked
         linear() {
-            return new Chunked(false, -1);
+            return new Chunked(false, 0);
         }
 
         public static Chunked

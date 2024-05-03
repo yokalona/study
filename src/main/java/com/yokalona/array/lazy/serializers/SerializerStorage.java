@@ -1,22 +1,27 @@
 package com.yokalona.array.lazy.serializers;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 public class SerializerStorage {
 
-    private static final HashMap<Class<?>, Serializer<?>> map = new HashMap<>() {{
-        put(Integer.class, IntegerSerializer.get);
-        put(Long.class, LongSerializer.INSTANCE);
-    }};
+    private static final HashMap<TypeDescriptor<?>, Serializer<?>> map = new HashMap<>();
+    public static final Serializer<Integer> INTEGER;
+
+    static {
+        TypeDescriptor<Integer> integerType = new TypeDescriptor<>(Integer.BYTES + 1, Integer.class);
+        register(integerType, INTEGER = new IntegerSerializer(integerType));
+    }
 
     public static <Type> void
-    register(Class<Type> type, Serializer<Type> serializer) {
+    register(TypeDescriptor<Type> type, Serializer<Type> serializer) {
         map.put(type, serializer);
     }
 
     @SuppressWarnings("unchecked")
     public static <Type> Serializer<Type>
-    get(Class<Type> type) {
+    get(TypeDescriptor<Type> type) {
         return (Serializer<Type>) map.get(type);
     }
 

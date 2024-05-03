@@ -25,7 +25,7 @@ class OutputWriter implements AutoCloseable {
     public void
     write(byte[] data) throws IOException {
         int written = 0;
-        while (position + data.length - written > buffer.length) {
+        while (position + data.length - written >= buffer.length) {
             written += write(data, written, buffer.length - position);
             flush();
         }
