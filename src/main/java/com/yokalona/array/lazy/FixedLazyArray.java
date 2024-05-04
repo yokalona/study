@@ -31,7 +31,7 @@ public class FixedLazyArray<Type extends FixedSizeObject> implements AutoCloseab
      *             of data. No matter on how much actually space is taken, the persistent layer will pad data to be
      *             exact 256 bytes and will trim any excess data. For each data point, this way of storing data actually
      *             requires one additional byte for each object to get around nullability of data.</li>
-     *             <li>DD = 10, same as above, however, null values are compacted to only one byte of space.</li>
+     *             <li>DD = 10, reserved</li>
      *             <li>DD = 11, reserved</li>
      *         </ul>
      *         <ul>
@@ -175,11 +175,11 @@ public class FixedLazyArray<Type extends FixedSizeObject> implements AutoCloseab
     private void
     serialiseChunk() {
         try (storage; OutputWriter writer = new OutputWriter(storage.get(), configuration.file().buffer())) {
-            if (queue.queue.isEmpty()) return;
-            int prior = queue.queue.removeFirst();
+            if (queue.count == 0) return;
+            int prior = queue.set.nextSetBit(0), current = 0;
             seek(storage.peek(), prior);
             writer.write(SerializerStorage.get(type).serialize((Type) data[prior]));
-            for (Integer current : queue.queue) {
+            while ((current = queue.set.nextSetBit(prior + 1)) != -1) {
                 if (current != prior + 1) {
                     writer.flush();
                     seek(storage.peek(), current);
@@ -285,28 +285,28 @@ public class FixedLazyArray<Type extends FixedSizeObject> implements AutoCloseab
     }
 
     private static class ChunkQueue {
-        TreeSet<Integer> queue = new TreeSet<>();
+        private final BitSet set;
+        private final int capacity;
+        private int count = 0;
 
-        final int capacity;
+        public ChunkQueue(int capacity) {
+            this.capacity = capacity;
+            this.set = new BitSet(capacity);
+        }
 
         boolean
         add(int index) {
-            queue.add(index);
-            return queue.size() == capacity;
+            if (!set.get(index)) {
+                set.set(index);
+                count ++;
+            }
+            return count == capacity;
         }
 
         void
         clear() {
-            queue.clear();
-        }
-
-        boolean
-        hasItems() {
-            return !queue.isEmpty();
-        }
-
-        public ChunkQueue(int capacity) {
-            this.capacity = capacity;
+            this.set.clear();
+            this.count = 0;
         }
 
     }

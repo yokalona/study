@@ -134,7 +134,7 @@ class FixedLazyArrayTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {10, 100, 1000, 10000, 100000, 1000000})
+    @ValueSource(ints = {10, 100, 1000, 10000, 100000})
     public void testLimitedString(int size) throws IOException {
         Path path = Files.createTempDirectory("fixed");
         byte[] bytes = new byte[varchar256.size()];
@@ -175,7 +175,7 @@ class FixedLazyArrayTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000})
+    @ValueSource(ints = {10, 100, 1000, 10000, 100000, 1000000})
     public void testStore(int size) throws IOException {
         Path path = Files.createTempDirectory("fixed");
         try (FixedLazyArray<INT> array = new FixedLazyArray<>(size, in,

@@ -13,6 +13,8 @@ repositories {
 }
 
 dependencies {
+    compileOnly("org.projectlombok:lombok:1.18.32")
+
     implementation("com.esotericsoftware:kryo:5.6.0")
 
     testImplementation(platform("org.junit:junit-bom:5.9.1"))
