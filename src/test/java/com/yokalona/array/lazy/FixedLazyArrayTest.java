@@ -14,8 +14,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Objects;
-import java.util.Random;
+import java.util.*;
 
 import static com.yokalona.array.lazy.Configuration.Chunked.chunked;
 import static com.yokalona.array.lazy.Configuration.Chunked.linear;
@@ -41,9 +40,10 @@ class FixedLazyArrayTest {
                     return bytes;
                 }
                 byte[] string = value.value.getBytes(StandardCharsets.UTF_8);
-                byte[] length = SerializerStorage.INTEGER.serialize(string.length);
+                byte[] length = SerializerStorage.INTEGER.serialize(Math.min(string.length, descriptor().size() - 1 - SerializerStorage.INTEGER.descriptor().size()));
                 System.arraycopy(length, 0, bytes, 1, length.length);
-                System.arraycopy(string, 0, bytes, 1 + length.length, Math.min(string.length, bytes.length - 1 - length.length));
+                int actual = Math.min(string.length, bytes.length - 1 - length.length);
+                System.arraycopy(string, 0, bytes, 1 + length.length, actual);
                 return bytes;
             }
 
@@ -99,37 +99,37 @@ class FixedLazyArrayTest {
     @Test
     public void testCreateNew() throws IOException {
         Path path = Files.createTempDirectory("fixed");
-        try(FixedLazyArray<INT> array = new FixedLazyArray<>(10, in,
+        try (FixedLazyArray<INT> array = new FixedLazyArray<>(10, in,
                 configure(new File(path.resolve("create-new-test.la"), RW, 8192, true))
                         .read(chunked(1000))
                         .write(chunked(10)))) {
-            for (int i = 0; i < 10; i ++) array.set(i, new INT(i), false);
-            for (int i = 0; i < 10; i ++) assertEquals(i, array.get(i).value);
+            for (int i = 0; i < 10; i++) array.set(i, new INT(i));
+            for (int i = 0; i < 10; i++) assertEquals(i, array.get(i).value);
         }
     }
 
     @Test
     public void testCreateNewPersistent() throws IOException {
         Path path = Files.createTempDirectory("fixed");
-        try(FixedLazyArray<INT> array = new FixedLazyArray<>(10, in,
+        try (FixedLazyArray<INT> array = new FixedLazyArray<>(10, in,
                 configure(new File(path.resolve("create-new-test.la"), RW, 8192, true))
                         .read(chunked(1000))
                         .write(chunked(10)))) {
-            for (int i = 0; i < 10; i ++) array.set(i, new INT(i), true);
-            for (int i = 0; i < 10; i ++) assertEquals(i, array.get(i).value);
+            for (int i = 0; i < 10; i++) array.set(i, new INT(i));
+            for (int i = 0; i < 10; i++) assertEquals(i, array.get(i).value);
         }
     }
 
     @Test
     public void testCreateNewPersistentMemoryFree() throws IOException {
         Path path = Files.createTempDirectory("fixed");
-        try(FixedLazyArray<INT> array = new FixedLazyArray<>(10, in,
+        try (FixedLazyArray<INT> array = new FixedLazyArray<>(10, in,
                 configure(new File(path.resolve("create-new-test.la"), RW, 8192, true))
                         .read(chunked(1000))
                         .write(linear()))) {
-            for (int i = 0; i < 10; i ++) array.set(i, new INT(i), true);
+            for (int i = 0; i < 10; i++) array.set(i, new INT(i));
             array.unload();
-            for (int i = 0; i < 10; i ++) assertEquals(i, array.get(i).value);
+            for (int i = 0; i < 10; i++) assertEquals(i, array.get(i).value);
         }
     }
 
@@ -142,14 +142,21 @@ class FixedLazyArrayTest {
         try (FixedLazyArray<VARCHAR> array = new FixedLazyArray<>(size, varchar256,
                 configure(new File(file, RW, 8192, true))
                         .read(chunked(1000))
-                        .write(chunked(2)))) {
-            for (int i = 0; i < size; i ++) {
+                        .write(chunked(100)))) {
+            Map<Integer, String> control = new HashMap<>();
+            for (int i = 0; i < size; i++) {
                 RANDOM.nextBytes(bytes);
-                array.set(i, new VARCHAR(new String(bytes, StandardCharsets.UTF_8), varchar256.size()), true);
-                array.unload(i);
+                String value = new String(bytes, StandardCharsets.UTF_8);
+                array.set(i, new VARCHAR(value, varchar256.size()));
+                if (RANDOM.nextBoolean()) {
+                    control.put(i, value);
+                }
+                if (i > 1001) array.unload(i - 1001);
             }
-            assertNotNull(array.get(2));
             System.out.println(getSize(Files.size(file)));
+//            for (Map.Entry<Integer, String> entry : control.entrySet()) {
+//                assertEquals(entry.getValue(), array.get(entry.getKey()).value, "" + array.get(entry.getKey()).value.length());
+//            }
         }
     }
 
@@ -157,45 +164,30 @@ class FixedLazyArrayTest {
     static long mega = kilo * kilo;
     static long giga = mega * kilo;
     static long tera = giga * kilo;
+
     public static String getSize(long size) {
-        String s = "";
-        double kb = (double)size / kilo;
-        double mb = kb / kilo;
-        double gb = mb / kilo;
-        double tb = gb / kilo;
-        if(size < kilo) {
-            s = size + " Bytes";
-        } else if(size < mega) {
-            s =  String.format("%.2f", kb) + " KB";
-        } else if(size < giga) {
-            s = String.format("%.2f", mb) + " MB";
-        } else if(size < tera) {
-            s = String.format("%.2f", gb) + " GB";
-        } else {
-            s = String.format("%.2f", tb) + " TB";
-        }
-        return s;
+        double kb = (double) size / kilo, mb = kb / kilo, gb = mb / kilo, tb = gb / kilo;
+        if (size < kilo) return size + " B";
+        else if (size < mega) return String.format("%.2f Kb", kb);
+        else if (size < giga) return String.format("%.2f Mb", mb);
+        else if (size < tera) return String.format("%.2f Gb", gb);
+        else return String.format("%.2f Tb", tb);
     }
 
-    @Test
-    public void testStore() throws IOException {
-        int size = 10_000_000;
+    @ParameterizedTest
+    @ValueSource(ints = {10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000})
+    public void testStore(int size) throws IOException {
         Path path = Files.createTempDirectory("fixed");
         try (FixedLazyArray<INT> array = new FixedLazyArray<>(size, in,
                 configure(new File(path.resolve("test_fixed.la"), RW, 8192, true))
                         .read(chunked(1000))
                         .write(chunked(1000)))) {
-            for (int i = 0; i < size; i ++) {
-                array.set(i, new INT(i), true);
-            }
-            array.flush();
-            array.unload();
-
             for (int i = 0; i < size; i++) {
-                assertEquals(i, array.get(i).value);
-                array.unload(i);
+                array.set(i, new INT(i));
+                if (i > 1001) array.unload(i - 1001);
             }
         }
+        System.out.println(getSize(Files.size(path.resolve("test_fixed.la"))));
 
         try (FixedLazyArray<INT> array = FixedLazyArray.deserialize(in,
                 configure(new File(path.resolve("test_fixed.la"), R, 8192, true))

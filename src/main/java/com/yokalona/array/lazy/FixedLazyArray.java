@@ -14,34 +14,56 @@ public class FixedLazyArray<Type extends FixedSizeObject> implements AutoCloseab
 
     private static final byte[] HEADER = new byte[]{-34, -54, -38, -6, -54, -38};
 
-    /*
+    /**
      * Version mark, represented as 4-byte word.
-     * 0-byte - critical version, no backward and no forward compatibility
-     * 1-byte - major version, forward compatible changes only
-     * 2-byte - minor version, backward and forward compatible changes
-     * 3-byte - storing algorithm: word = (AA BB CC DD)2
-     *   DD - 00, non-fixed array, storing keys and offsets in different files
-     *        01, fixed array, where each object is padded to fix exact size no matter how much actual space it takes,
-     *            for example, in general, integer takes 4 bytes to be stored, however for string the size depends on
-     *            its content and is not known ahead of time, in such a case, the size of a string should be predefined,
-     *            for example, let's say that any string stored in this exact array has 256 bytes of data. No matter on
-     *            how much actually space is taken, the persistent layer will pad data to be exact 256 bytes and will
-     *            trim any excess data. For each data point, this way of storing data actually requires one additional
-     *            byte for each object to get around nullability of data.
-     *        10, fixed array, where each object is padded to fix exact size no matter how much actual space it takes,
-     *            however, null values are compacted to only one byte of space.
-     *        11, reserved
-     *   CC - 00, non-chunked, array is stored as is
-     *        01, an array is divided by chunks. Chunk is loaded and stored as a whole in an atomic operation. The size
-     *            of a chunk will be stored in the next two bytes
-     *        10, an array is divided by compressed chunks. Chunk is loaded and stored as a whole in an atomic
-     *            operation. On store operation chunk is archived using an available algorithm, for example, LZ4 or
-     *            similar. Using the same algorithm, it will be unarchived on any read operation.
-     *        11, reserved
-     *    A - 00, reserved
-     *        01, reserved
-     *        10, reserved
-     *        11, reserved
+     * <pre>
+     *     <ul>
+     *         <li>0-byte - critical version, no backward and no forward compatibility</li>
+     *         <li>1-byte - major version, forward compatible changes only</li>
+     *         <li>2-byte - minor version, backward and forward compatible changes</li>
+     *         <li>3-byte - storing algorithm: word = <b>(AA BB CC DD)2<b/>:</li>
+     *         <ul>
+     *             <li>DD = 00, non-fixed array, storing keys and offsets in different files</li>
+     *             <li>DD = 01, fixed array, where each object is padded to fix exact size no matter how much actual
+     *             space it takes, for example, in general, integer takes 4 bytes to be stored, however for string the
+     *             size depends on its content and is not known ahead of time, in such a case, the size of a string
+     *             should be predefined, for example, let's say that any string stored in this exact array has 256 bytes
+     *             of data. No matter on how much actually space is taken, the persistent layer will pad data to be
+     *             exact 256 bytes and will trim any excess data. For each data point, this way of storing data actually
+     *             requires one additional byte for each object to get around nullability of data.</li>
+     *             <li>DD = 10, same as above, however, null values are compacted to only one byte of space.</li>
+     *             <li>DD = 11, reserved</li>
+     *         </ul>
+     *         <ul>
+     *             <li>CC = 00, non-chunked, array is stored as is</li>
+     *             <li>CC = 01, an array is divided by chunks. Chunk is loaded and stored as a whole in an atomic
+     *             operation. The size of a chunk will be stored in the next two bytes</li>
+     *             <li>CC = 10, an array is divided by compressed chunks. Chunk is loaded and stored as a whole in an
+     *             atomic operation. On store operation chunk is archived using an available algorithm, for example, LZ4
+     *             or similar. Using the same algorithm, it will be unarchived on any read operation.</li>
+     *             <li>CC = 11, hot-chunk mode. If very same keys are regularly updated and read hot mode will put them
+     *             in separate fixed size file to allow quick read/write operations. However, this file will have fixed
+     *             small size and eviction process will be costly</li>
+     *         </ul>
+     *         <ul>
+     *             <li>BB = 00, keys are stored sequentially, optimal for fast sequential read and write operations,
+     *             however search will be slower, depending on other settings it might not have any guaranty about
+     *             performance impact</li>
+     *             <li>BB = 01, keys are stored optimal for quick search operation, however any sequential operation
+     *             will be slower and highly dependant on other configuration setting and/or file system and OS.
+     *             Depending on use case, it might be reasonable to first use BB = 00, then convert array to BB = 01, if
+     *             it is expected that little to no sequential operation will happen in near future.</li>
+     *             <li>BB = 10, reserved</li>
+     *             <li>BB = 11, reserved</li>
+     *         </ul>
+     *         <ul>
+     *             <li>AA = 00, reserved</li>
+     *             <li>AA = 01, reserved</li>
+     *             <li>AA = 10, reserved</li>
+     *             <li>AA = 11, reserved</li>
+     *         </ul>
+     *     </ul>
+     * </pre>
      */
     private static final byte[] VERSION = new byte[]{0x01, 0x01, 0x00, 0x00};
 
@@ -76,16 +98,11 @@ public class FixedLazyArray<Type extends FixedSizeObject> implements AutoCloseab
     }
 
     public final void
-    set(int index, Type value, boolean store) {
+    set(int index, Type value) {
         assert index >= 0 && index < data.length;
 
         data[index] = value;
         loaded.set(index);
-        if (store) store(index);
-    }
-
-    private void
-    store(int index) {
         if (configuration.write().chunked()) {
             if (queue.add(index)) {
                 flush();
@@ -157,11 +174,17 @@ public class FixedLazyArray<Type extends FixedSizeObject> implements AutoCloseab
     @SuppressWarnings("unchecked")
     private void
     serialiseChunk() {
-        try (storage; OutputWriter writer = new OutputWriter(storage.get(),
-                SerializerStorage.get(type).descriptor().size())) {
-            for (Integer index : queue.queue) {
-                seek(storage.peek(), index);
-                writer.write(SerializerStorage.get(type).serialize((Type) data[index]));
+        try (storage; OutputWriter writer = new OutputWriter(storage.get(), configuration.file().buffer())) {
+            if (queue.queue.isEmpty()) return;
+            int prior = queue.queue.removeFirst();
+            seek(storage.peek(), prior);
+            writer.write(SerializerStorage.get(type).serialize((Type) data[prior]));
+            for (Integer current : queue.queue) {
+                if (current != prior + 1) {
+                    writer.flush();
+                    seek(storage.peek(), current);
+                }
+                writer.write(SerializerStorage.get(type).serialize((Type) data[prior = current]));
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
