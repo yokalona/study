@@ -1,5 +1,6 @@
 package com.yokalona.array.lazy;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 public record Configuration(File file, Chunked read, Chunked write) {
@@ -47,16 +48,22 @@ public record Configuration(File file, Chunked read, Chunked write) {
         }
     }
 
-    public record Chunked(boolean chunked, int size) {
+    public record Chunked(boolean chunked, int size, boolean hot) {
         public static Chunked
         linear() {
-            return new Chunked(false, 0);
+            return new Chunked(false, 0, false);
         }
 
         public static Chunked
         chunked(int size) {
             assert size > 0;
-            return new Chunked(true, size);
+            return new Chunked(true, size, false);
+        }
+
+        public static Chunked
+        chunked(int size, boolean hot) {
+            assert size > 0;
+            return new Chunked(true, size, true);
         }
     }
 }

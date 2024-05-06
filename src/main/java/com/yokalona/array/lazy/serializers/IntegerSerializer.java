@@ -1,18 +1,22 @@
 package com.yokalona.array.lazy.serializers;
 
-public record IntegerSerializer(TypeDescriptor<Integer> descriptor) implements Serializer<Integer> {
+public record IntegerSerializer(TypeDescriptor<Integer> descriptor, byte[] bytes) implements Serializer<Integer> {
+
+    public IntegerSerializer(TypeDescriptor<Integer> descriptor) {
+        this(descriptor, new byte[descriptor.size()]);
+    }
 
     @Override
     public byte[] serialize(Integer value) {
-        byte[] bytes = new byte[descriptor.size()];
         if (value == null) {
             bytes[0] = 0xF;
             return bytes;
-        }
+        } else bytes[0] = 0x0;
         int length = bytes.length;
+        int vals = value.intValue();
         for (int i = 0; i < bytes.length - 1; i++) {
-            bytes[length - i - 1] = (byte) (value & 0xFF);
-            value >>= 8;
+            bytes[length - i - 1] = (byte) (vals & 0xFF);
+            vals >>= 8;
         }
         return bytes;
     }

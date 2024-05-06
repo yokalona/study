@@ -1,25 +1,20 @@
 package com.yokalona.array.lazy;
 
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.RandomAccessFile;
+import java.io.*;
 
 class OutputWriter implements AutoCloseable {
 
-    private final OutputStream output;
+    private final RandomAccessFile raf;
     private final byte[] buffer;
-    private final boolean keepAlive;
     private int position;
 
-    public OutputWriter(OutputStream output, int size, boolean keepAlive) {
-        this.output = output;
-        this.buffer = new byte[size];
-        this.keepAlive = keepAlive;
+    public OutputWriter(RandomAccessFile raf, int size) {
+        this(raf, new byte[size]);
     }
 
-    public OutputWriter(RandomAccessFile raf, int size) throws IOException {
-        this(new FileOutputStream(raf.getFD()), size, true);
+    public OutputWriter(RandomAccessFile raf, byte[] buffer) {
+        this.raf = raf;
+        this.buffer = buffer;
     }
 
     public void
@@ -41,7 +36,7 @@ class OutputWriter implements AutoCloseable {
 
     public void
     flush() throws IOException {
-        output.write(buffer, 0, position);
+        raf.write(buffer, 0, position);
         position = 0;
     }
 
@@ -49,6 +44,5 @@ class OutputWriter implements AutoCloseable {
     public void
     close() throws Exception {
         flush();
-        if (!keepAlive) output.close();
     }
 }

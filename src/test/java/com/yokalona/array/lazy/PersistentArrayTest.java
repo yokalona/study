@@ -1,7 +1,6 @@
 package com.yokalona.array.lazy;
 
 import com.yokalona.array.lazy.Configuration.File;
-import com.yokalona.array.lazy.serializers.IntegerSerializer;
 import com.yokalona.array.lazy.serializers.Serializer;
 import com.yokalona.array.lazy.serializers.SerializerStorage;
 import com.yokalona.array.lazy.serializers.TypeDescriptor;
@@ -11,6 +10,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,14 +22,54 @@ import static com.yokalona.array.lazy.Configuration.File.Mode.*;
 import static com.yokalona.array.lazy.Configuration.configure;
 import static org.junit.jupiter.api.Assertions.*;
 
-class FixedLazyArrayTest {
+class PersistentArrayTest {
 
     public static final Random RANDOM = new Random();
     static TypeDescriptor<INT> in = new TypeDescriptor<>(5, INT.class);
+    static TypeDescriptor<CompactInteger> compact = new TypeDescriptor<>(5, CompactInteger.class);
     static TypeDescriptor<VARCHAR> varchar256 = new TypeDescriptor<>(256 + 1 + SerializerStorage.INTEGER.descriptor().size(), VARCHAR.class);
 
     @BeforeAll
     public static void setUp() {
+        byte [] bytes = new byte[5];
+        SerializerStorage.register(compact, new Serializer<>() {
+
+            @Override
+            public byte[] serialize(CompactInteger value) {
+                if (value == null) {
+                    bytes[0] = 0xF;
+                    return bytes;
+                } else bytes[0] = 0x0;
+                int length = bytes.length;
+                int vals = value.get();
+                for (int i = 0; i < bytes.length - 1; i++) {
+                    bytes[length - i - 1] = (byte) (vals & 0xFF);
+                    vals >>= 8;
+                }
+                return bytes;
+            }
+
+            @Override
+            public CompactInteger deserialize(byte[] bytes) {
+                return deserialize(bytes, 0);
+            }
+
+            @Override
+            public CompactInteger deserialize(byte[] bytes, int offset) {
+                if (bytes[offset] == 0xF) return null;
+                int value = 0;
+                for (int index = offset + 1; index < offset + 5; index++) {
+                    value = (value << 8) + (bytes[index] & 0xFF);
+                }
+                return new CompactInteger(value);
+            }
+
+            @Override
+            public TypeDescriptor<CompactInteger> descriptor() {
+                return compact;
+            }
+        });
+
         SerializerStorage.register(varchar256, new Serializer<>() {
 
             @Override
@@ -68,7 +108,7 @@ class FixedLazyArrayTest {
 
         SerializerStorage.register(in, new Serializer<>() {
 
-            Serializer<Integer> serializer = SerializerStorage.INTEGER;
+            final Serializer<Integer> serializer = SerializerStorage.INTEGER;
 
             @Override
             public byte[]
@@ -99,7 +139,7 @@ class FixedLazyArrayTest {
     @Test
     public void testCreateNew() throws IOException {
         Path path = Files.createTempDirectory("fixed");
-        try (FixedLazyArray<INT> array = new FixedLazyArray<>(10, in,
+        try (PersistentArray<INT> array = new PersistentArray<>(10, in, new PersistentArray.FixedSearchFormat(in),
                 configure(new File(path.resolve("create-new-test.la"), RW, 8192, true))
                         .read(chunked(1000))
                         .write(chunked(10)))) {
@@ -111,7 +151,7 @@ class FixedLazyArrayTest {
     @Test
     public void testCreateNewPersistent() throws IOException {
         Path path = Files.createTempDirectory("fixed");
-        try (FixedLazyArray<INT> array = new FixedLazyArray<>(10, in,
+        try (PersistentArray<INT> array = new PersistentArray<>(10, in, new PersistentArray.FixedSearchFormat(in),
                 configure(new File(path.resolve("create-new-test.la"), RW, 8192, true))
                         .read(chunked(1000))
                         .write(chunked(10)))) {
@@ -123,7 +163,7 @@ class FixedLazyArrayTest {
     @Test
     public void testCreateNewPersistentMemoryFree() throws IOException {
         Path path = Files.createTempDirectory("fixed");
-        try (FixedLazyArray<INT> array = new FixedLazyArray<>(10, in,
+        try (PersistentArray<INT> array = new PersistentArray<>(10, in, new PersistentArray.FixedSearchFormat(in),
                 configure(new File(path.resolve("create-new-test.la"), RW, 8192, true))
                         .read(chunked(1000))
                         .write(linear()))) {
@@ -134,29 +174,65 @@ class FixedLazyArrayTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {10, 100, 1000, 10000, 100000})
+    @ValueSource(ints = {100_000_000})
+    public void test(int size) throws IOException {
+        Path path = Files.createTempDirectory("fixed");
+        Path file = path.resolve("compact.la");
+        try (PersistentArray<CompactInteger> array = new PersistentArray<>(size, compact, new PersistentArray.FixedSearchFormat(compact),
+                configure(new File(file, RW, 32768, true))
+                        .read(chunked(100000))
+                        .write(chunked(100000)))) {
+            for (int i = 0; i < size; i++) {
+                array.set(i, new CompactInteger(i));
+                if (i > 100001) array.unload(i - 100001);
+            }
+            array.flush();
+            array.unload();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {100_000_000})
+    public void testIntegers(int size) throws IOException {
+        Path path = Files.createTempDirectory("fixed");
+        Path file = path.resolve("integers.la");
+        try (PersistentArray<Integer> array = new PersistentArray<>(size, SerializerStorage.INTEGER.descriptor(), new PersistentArray.FixedSearchFormat(SerializerStorage.INTEGER.descriptor()),
+                configure(new File(file, RW, 32768, true))
+                        .read(chunked(100000))
+                        .write(chunked(100000)))) {
+            for (int i = 0; i < size; i++) {
+                array.set(i, i);
+                if (i > 100001) array.unload(i - 100001);
+            }
+            array.flush();
+            array.unload();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {10, 100, 1000, 10000, 100000, 1000000})
     public void testLimitedString(int size) throws IOException {
         Path path = Files.createTempDirectory("fixed");
-        byte[] bytes = new byte[varchar256.size()];
         Path file = path.resolve("string.la");
-        try (FixedLazyArray<VARCHAR> array = new FixedLazyArray<>(size, varchar256,
+        try (PersistentArray<VARCHAR> array = new PersistentArray<>(size, varchar256, new PersistentArray.FixedSearchFormat(varchar256),
                 configure(new File(file, RW, 8192, true))
-                        .read(chunked(1000))
-                        .write(chunked(100)))) {
+                        .read(linear())
+                        .write(linear()))) {
             Map<Integer, String> control = new HashMap<>();
             for (int i = 0; i < size; i++) {
-                RANDOM.nextBytes(bytes);
-                String value = new String(bytes, StandardCharsets.UTF_8);
-                array.set(i, new VARCHAR(value, varchar256.size()));
+                String value = UUID.randomUUID().toString();
+                array.set(i, new VARCHAR(value, 256));
                 if (RANDOM.nextBoolean()) {
                     control.put(i, value);
                 }
-                if (i > 1001) array.unload(i - 1001);
+                array.unload(i);
             }
             System.out.println(getSize(Files.size(file)));
-//            for (Map.Entry<Integer, String> entry : control.entrySet()) {
-//                assertEquals(entry.getValue(), array.get(entry.getKey()).value, "" + array.get(entry.getKey()).value.length());
-//            }
+            for (Map.Entry<Integer, String> entry : control.entrySet()) {
+                assertEquals(entry.getValue(),
+                        array.get(entry.getKey()).value, "" + array.get(entry.getKey()).value.length());
+                array.unload(entry.getKey());
+            }
         }
     }
 
@@ -175,21 +251,21 @@ class FixedLazyArrayTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {10, 100, 1000, 10000, 100000, 1000000})
+    @ValueSource(ints = {10, 100, 1000, 10000, 100000, 1000000, 10_000_000})
     public void testStore(int size) throws IOException {
         Path path = Files.createTempDirectory("fixed");
-        try (FixedLazyArray<INT> array = new FixedLazyArray<>(size, in,
+        try (PersistentArray<INT> array = new PersistentArray<>(size, in, new PersistentArray.FixedSearchFormat(in),
                 configure(new File(path.resolve("test_fixed.la"), RW, 8192, true))
                         .read(chunked(1000))
-                        .write(chunked(1000)))) {
+                        .write(linear()))) {
             for (int i = 0; i < size; i++) {
                 array.set(i, new INT(i));
-                if (i > 1001) array.unload(i - 1001);
+                array.unload(i);
             }
         }
         System.out.println(getSize(Files.size(path.resolve("test_fixed.la"))));
 
-        try (FixedLazyArray<INT> array = FixedLazyArray.deserialize(in,
+        try (PersistentArray<INT> array = PersistentArray.deserialize(in,
                 configure(new File(path.resolve("test_fixed.la"), R, 8192, true))
                         .read(chunked(1000))
                         .write(linear()), true)) {
@@ -220,6 +296,19 @@ class FixedLazyArrayTest {
         @Override
         public int sizeOf() {
             return size;
+        }
+    }
+
+    static class CompactInteger {
+        private final int value;
+
+        CompactInteger(int value) {
+            this.value = value;
+        }
+
+        public int
+        get() {
+            return value;
         }
     }
 
