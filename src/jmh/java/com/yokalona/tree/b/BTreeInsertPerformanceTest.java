@@ -56,4 +56,17 @@ public class BTreeInsertPerformanceTest {
         blackhole.consume(bTree.insert(data[executionPlan.key++], executionPlan.key));
     }
 
+    public static void main(String[] args) throws RunnerException {
+        Options options = new OptionsBuilder()
+                .forks(1)
+                .resultFormat(ResultFormatType.JSON)
+                .result("benchmarks/output.json")
+                .addProfiler(ComparisonCountProfiler.class)
+                .addProfiler(JavaFlightRecorderProfiler.class, "dir=jfr")
+                .include(BTreeInsertPerformanceTest.class.getSimpleName())
+                .build();
+
+        new Runner(options).run();
+    }
+
 }

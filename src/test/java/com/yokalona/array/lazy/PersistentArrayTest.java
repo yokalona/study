@@ -4,13 +4,11 @@ import com.yokalona.array.lazy.Configuration.File;
 import com.yokalona.array.lazy.serializers.Serializer;
 import com.yokalona.array.lazy.serializers.SerializerStorage;
 import com.yokalona.array.lazy.serializers.TypeDescriptor;
+import com.yokalona.tree.TestHelper;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,6 +17,9 @@ import java.util.*;
 import static com.yokalona.array.lazy.Configuration.Chunked.chunked;
 import static com.yokalona.array.lazy.Configuration.Chunked.linear;
 import static com.yokalona.array.lazy.Configuration.File.Mode.*;
+import static com.yokalona.array.lazy.Configuration.File.file;
+import static com.yokalona.array.lazy.Configuration.InMemory.memorise;
+import static com.yokalona.array.lazy.Configuration.InMemory.none;
 import static com.yokalona.array.lazy.Configuration.configure;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -31,7 +32,7 @@ class PersistentArrayTest {
 
     @BeforeAll
     public static void setUp() {
-        byte [] bytes = new byte[5];
+        byte[] bytes = new byte[5];
         SerializerStorage.register(compact, new Serializer<>() {
 
             @Override
@@ -139,8 +140,9 @@ class PersistentArrayTest {
     @Test
     public void testCreateNew() throws IOException {
         Path path = Files.createTempDirectory("fixed");
-        try (PersistentArray<INT> array = new PersistentArray<>(10, in, new PersistentArray.FixedSearchFormat(in),
+        try (PersistentArray<INT> array = new PersistentArray<>(10, in, new PersistentArray.FixedObjectLayout(in),
                 configure(new File(path.resolve("create-new-test.la"), RW, 8192, true))
+                        .memory(none())
                         .read(chunked(1000))
                         .write(chunked(10)))) {
             for (int i = 0; i < 10; i++) array.set(i, new INT(i));
@@ -151,88 +153,13 @@ class PersistentArrayTest {
     @Test
     public void testCreateNewPersistent() throws IOException {
         Path path = Files.createTempDirectory("fixed");
-        try (PersistentArray<INT> array = new PersistentArray<>(10, in, new PersistentArray.FixedSearchFormat(in),
+        try (PersistentArray<INT> array = new PersistentArray<>(10, in, new PersistentArray.FixedObjectLayout(in),
                 configure(new File(path.resolve("create-new-test.la"), RW, 8192, true))
+                        .memory(none())
                         .read(chunked(1000))
                         .write(chunked(10)))) {
             for (int i = 0; i < 10; i++) array.set(i, new INT(i));
             for (int i = 0; i < 10; i++) assertEquals(i, array.get(i).value);
-        }
-    }
-
-    @Test
-    public void testCreateNewPersistentMemoryFree() throws IOException {
-        Path path = Files.createTempDirectory("fixed");
-        try (PersistentArray<INT> array = new PersistentArray<>(10, in, new PersistentArray.FixedSearchFormat(in),
-                configure(new File(path.resolve("create-new-test.la"), RW, 8192, true))
-                        .read(chunked(1000))
-                        .write(linear()))) {
-            for (int i = 0; i < 10; i++) array.set(i, new INT(i));
-            array.unload();
-            for (int i = 0; i < 10; i++) assertEquals(i, array.get(i).value);
-        }
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = {100_000_000})
-    public void test(int size) throws IOException {
-        Path path = Files.createTempDirectory("fixed");
-        Path file = path.resolve("compact.la");
-        try (PersistentArray<CompactInteger> array = new PersistentArray<>(size, compact, new PersistentArray.FixedSearchFormat(compact),
-                configure(new File(file, RW, 32768, true))
-                        .read(chunked(100000))
-                        .write(chunked(100000)))) {
-            for (int i = 0; i < size; i++) {
-                array.set(i, new CompactInteger(i));
-                if (i > 100001) array.unload(i - 100001);
-            }
-            array.flush();
-            array.unload();
-        }
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = {100_000_000})
-    public void testIntegers(int size) throws IOException {
-        Path path = Files.createTempDirectory("fixed");
-        Path file = path.resolve("integers.la");
-        try (PersistentArray<Integer> array = new PersistentArray<>(size, SerializerStorage.INTEGER.descriptor(), new PersistentArray.FixedSearchFormat(SerializerStorage.INTEGER.descriptor()),
-                configure(new File(file, RW, 32768, true))
-                        .read(chunked(100000))
-                        .write(chunked(100000)))) {
-            for (int i = 0; i < size; i++) {
-                array.set(i, i);
-                if (i > 100001) array.unload(i - 100001);
-            }
-            array.flush();
-            array.unload();
-        }
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = {10, 100, 1000, 10000, 100000, 1000000})
-    public void testLimitedString(int size) throws IOException {
-        Path path = Files.createTempDirectory("fixed");
-        Path file = path.resolve("string.la");
-        try (PersistentArray<VARCHAR> array = new PersistentArray<>(size, varchar256, new PersistentArray.FixedSearchFormat(varchar256),
-                configure(new File(file, RW, 8192, true))
-                        .read(linear())
-                        .write(linear()))) {
-            Map<Integer, String> control = new HashMap<>();
-            for (int i = 0; i < size; i++) {
-                String value = UUID.randomUUID().toString();
-                array.set(i, new VARCHAR(value, 256));
-                if (RANDOM.nextBoolean()) {
-                    control.put(i, value);
-                }
-                array.unload(i);
-            }
-            System.out.println(getSize(Files.size(file)));
-            for (Map.Entry<Integer, String> entry : control.entrySet()) {
-                assertEquals(entry.getValue(),
-                        array.get(entry.getKey()).value, "" + array.get(entry.getKey()).value.length());
-                array.unload(entry.getKey());
-            }
         }
     }
 
@@ -243,38 +170,114 @@ class PersistentArrayTest {
 
     public static String getSize(long size) {
         double kb = (double) size / kilo, mb = kb / kilo, gb = mb / kilo, tb = gb / kilo;
-        if (size < kilo) return size + " B";
+        if (size < kilo) return size + " b";
         else if (size < mega) return String.format("%.2f Kb", kb);
         else if (size < giga) return String.format("%.2f Mb", mb);
         else if (size < tera) return String.format("%.2f Gb", gb);
         else return String.format("%.2f Tb", tb);
     }
 
-    @ParameterizedTest
-    @ValueSource(ints = {10, 100, 1000, 10000, 100000, 1000000, 10_000_000})
-    public void testStore(int size) throws IOException {
-        Path path = Files.createTempDirectory("fixed");
-        try (PersistentArray<INT> array = new PersistentArray<>(size, in, new PersistentArray.FixedSearchFormat(in),
-                configure(new File(path.resolve("test_fixed.la"), RW, 8192, true))
-                        .read(chunked(1000))
-                        .write(linear()))) {
-            for (int i = 0; i < size; i++) {
-                array.set(i, new INT(i));
-                array.unload(i);
-            }
-        }
-        System.out.println(getSize(Files.size(path.resolve("test_fixed.la"))));
+    int[] size = {
+            Power.two(5), Power.two(10), Power.two(20), Power.two(25)};
+    int[] memory = {
+            Power.two(5),
+            Power.two(10)};
+    int[] read = {
+            Power.two(5),
+            Power.two(10)};
+    int[] write = {
+            Power.two(5),
+            Power.two(10)};
 
-        try (PersistentArray<INT> array = PersistentArray.deserialize(in,
-                configure(new File(path.resolve("test_fixed.la"), R, 8192, true))
-                        .read(chunked(1000))
-                        .write(linear()), true)) {
-            assertEquals(size, array.length());
-            for (int i = 0; i < size; i++) {
-                assertEquals(i, array.get(i).value);
-                array.unload(i);
+    record PersistenceTest(int size, int memory, int read, int write) { }
+
+    @Test
+    public void test222() throws IOException {
+        Path path = Files.createTempDirectory("fixed");
+        PersistenceTest[] tests = new PersistenceTest[size.length * memory.length * read.length * write.length];
+        int t = 0;
+        for (int length : size) {
+            for (int mem : memory) {
+                for (int readChunk : read) {
+                    for (int writeChunk : write) {
+                        tests[t++] = new PersistenceTest(length, mem, readChunk, writeChunk);
+                    }
+                }
             }
         }
+        System.out.printf("Generated %d tests for linear read/write array%n", tests.length);
+        for (PersistenceTest test : tests) {
+            Configuration configuration = configure(
+                    file(path.resolve("crwmcs.la"))
+                            .mode(RW)
+                            .buffer(Power.two(13))
+                            .cached())
+                    .memory(memorise(test.memory))
+                    .read(test.read > 0 ? chunked(test.read) : linear())
+                    .write(test.write > 0 ? chunked(test.write) : linear());
+            long lwrite = createLinear(test.size, configuration);
+            long rwrite = createRandom(test.size, configuration);
+            long fileSize = Files.size(configuration.file().path());
+            long read = readLinear(test.size, configuration);
+            printResults(test, lwrite, rwrite, fileSize, read);
+        }
+    }
+
+    private static long readLinear(int length, Configuration configuration) {
+        long start = System.currentTimeMillis();
+        try (var array = PersistentArray.deserialize(compact, configuration)) {
+            for (int index = 0; index < length; index++)
+                assertEquals(index, array.get(index).value);
+        }
+        return System.currentTimeMillis() - start;
+    }
+
+    private static long createLinear(int length, Configuration configuration) {
+        long start = System.currentTimeMillis();
+        try (var array = new PersistentArray<>(length, compact, new PersistentArray.FixedObjectLayout(compact), configuration)) {
+            for (int index = 0; index < length; index++) array.set(index, new CompactInteger(index));
+        }
+        return System.currentTimeMillis() - start;
+    }
+
+    private static long createRandom(int length, Configuration configuration) {
+        long start = System.currentTimeMillis();
+        int [] indices = new int[length];
+        for (int index = 0; index < length; index ++) {
+            indices[index] = index;
+        }
+        TestHelper.shuffle(indices);
+        try (var array = new PersistentArray<>(length, compact, new PersistentArray.FixedObjectLayout(compact), configuration)) {
+            for (int index : indices) array.set(index, new CompactInteger(index));
+        }
+        return System.currentTimeMillis() - start;
+    }
+
+    private static long readRandom(int length, Configuration configuration, int[] p) {
+        long start = System.currentTimeMillis();
+        try (var array = PersistentArray.deserialize(compact, configuration)) {
+            for (int index = 0; index < length; index++) {
+                int idx = RANDOM.nextInt(length);
+                assertEquals(p[idx], array.get(idx).value, " " + configuration);
+            }
+        }
+        return System.currentTimeMillis() - start;
+    }
+
+    private static void printResults(PersistenceTest test, long lwrite, long rwrite, long fileSize, long reading) {
+        System.out.printf("""
+                        |--------------------------------------------------------------|
+                        | Array size:                             | %10d records |
+                        |     Memory size:                        | %10d records |
+                        |     Chunks:                             | %10s         |
+                        |         Read:                           | %10d records |
+                        |         Write:                          | %10d records |
+                        |     Took:                               | %10s         |
+                        |         Linear write                    | %10d ms      |
+                        |         Random write                    | %10d ms      |
+                        |         Deserialization and Validation: | %10d ms      |
+                        |     File size:                          | %13s      |%n""",
+                test.size, test.memory, ' ', test.read, test.write, ' ', lwrite, rwrite, reading, getSize(fileSize));
     }
 
     static class VARCHAR implements FixedSizeObject {
@@ -308,6 +311,21 @@ class PersistentArrayTest {
 
         public int
         get() {
+            return value;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            CompactInteger that = (CompactInteger) o;
+
+            return value == that.value;
+        }
+
+        @Override
+        public int hashCode() {
             return value;
         }
     }

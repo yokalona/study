@@ -9,11 +9,12 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
-import java.lang.ref.ReferenceQueue;
-import java.lang.ref.SoftReference;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.HashMap;
+import java.util.Map;
 
 
 /**
@@ -97,40 +98,48 @@ public class PersistentArray<Type> implements AutoCloseable {
     private static final byte[] VERSION = new byte[]{0x01, 0x01, 0x00, 0x00};
     public static final int HEADER_SIZE = HEADER.length + VERSION.length + (2 * SerializerStorage.INTEGER.descriptor().size());
 
-    private final BitSet loaded;
     private final Object[] data;
     private final ChunkQueue queue;
+    private final LRUCache lruCache;
     private final CachedFile storage;
-    private final SearchFormat searchFormat;
+    private final DataLayout dataLayout;
     private final TypeDescriptor<Type> type;
-    private final Configuration configuration;
+    public final Configuration configuration;
 
     private final byte[] reusableBuffer;
 
-    private PersistentArray(TypeDescriptor<Type> type, Object[] data, BitSet loaded, SearchFormat searchFormat,
+    private PersistentArray(TypeDescriptor<Type> type, Object[] data, DataLayout dataLayout,
                             Configuration configuration) {
         this.type = type;
         this.data = data;
-        this.loaded = loaded;
+        this.dataLayout = dataLayout;
         this.configuration = configuration;
         this.storage = new CachedFile(configuration.file());
         this.queue = new ChunkQueue(configuration.write().size());
-        this.searchFormat = searchFormat;
-
+        this.lruCache = new LRUCache(configuration.memory().count());
         this.reusableBuffer = new byte[configuration.file().buffer()];
     }
 
-    public PersistentArray(int length, TypeDescriptor<Type> type, SearchFormat searchFormat, Configuration configuration) {
-        this(type, new Object[length], loaded(length, length), searchFormat, configuration);
+    public PersistentArray(int length, TypeDescriptor<Type> type, DataLayout dataLayout, Configuration configuration) {
+        this(type, new Object[length], dataLayout, configuration);
         serialise();
     }
 
+    /**
+     * Returns item from the array. Loads from disk if necessary. Depending on configuration, may unload the least
+     * recently used item in an array that is loaded into memory.
+     * @param index of item to return
+     * @return always loaded item in the array. It is guaranteed that the returned item is at the time of return is
+     * fully loaded into memory. To override this behavior, one might use proxy classes.
+     */
     @SuppressWarnings("unchecked")
     public final Type
     get(int index) {
         assert index >= 0 && index < data.length;
 
-        if (!loaded.get(index)) deserialize(index, configuration.read().chunked() ? configuration.read().size() : 1);
+        if (lruCache.cached(index)) lruCache.raise(index);
+        else load(index);
+
         return (Type) data[index];
     }
 
@@ -144,47 +153,42 @@ public class PersistentArray<Type> implements AutoCloseable {
         } else serialise(index);
     }
 
-    private void associate(int index, Type value) {
-        data[index] = value;
-        loaded.set(index);
-    }
-
     public int
     length() {
         return data.length;
     }
 
-    public final void
-    unload(int index) {
-        assert index >= 0 && index < data.length;
+    public int
+    loaded() {
+        return lruCache.nodes.size();
+    }
 
-        loaded.set(index, false);
+    public void
+    clear() throws IOException {
+        close();
+        Files.deleteIfExists(configuration.file().path());
+        Arrays.fill(data, null);
+        lruCache.clear();
+        queue.clear();
+    }
+
+    private void
+    unload(int index) {
+        if (index < 0) return;
+        assert index < data.length;
+
         data[index] = null;
     }
 
-    public final void
-    unload(int from, int to) {
-        assert from >= 0 && from <= to && to < data.length;
-
-        loaded.set(from, to, false);
-        Arrays.fill(data, from, to, null);
-    }
-
-    public final void
-    unload() {
-        loaded.clear();
-        Arrays.fill(data, null);
-    }
-
     @SuppressWarnings("unchecked")
-    public void
+    private void
     serialise() {
         try (storage; OutputWriter writer = new OutputWriter(storage.get(), reusableBuffer)) {
             writer.write(HEADER);
             byte[] version = Arrays.copyOf(VERSION, 4);
             version[3] = 0b0_00_00_01;
             writer.write(version);
-            searchFormat.init(storage.peek());
+            dataLayout.init(storage.peek());
             Serializer<Integer> integer = SerializerStorage.INTEGER;
             writer.write(integer.serialize(data.length));
             Serializer<Type> serializer = SerializerStorage.get(type);
@@ -196,11 +200,22 @@ public class PersistentArray<Type> implements AutoCloseable {
     }
 
     private void
+    load(int index) {
+        deserialize(index, configuration.read().chunked() ? configuration.read().size() : 1);
+    }
+
+    private void associate(int index, Type value) {
+        data[index] = value;
+        int pushed = lruCache.cache(index);
+        unload(pushed);
+    }
+
+    private void
     serialise(int index) {
         assert index >= 0 && index < data.length;
 
         try (storage; OutputWriter writer = new OutputWriter(storage.get(), reusableBuffer)) {
-            searchFormat.seek(index, storage.peek());
+            dataLayout.seek(index, storage.peek());
             serialize(writer, index);
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -212,12 +227,12 @@ public class PersistentArray<Type> implements AutoCloseable {
         try (storage; OutputWriter writer = new OutputWriter(storage.get(), reusableBuffer)) {
             if (queue.count == 0) return;
             int prior = queue.first, current;
-            searchFormat.seek(prior, storage.peek());
+            dataLayout.seek(prior, storage.peek());
             serialize(writer, prior);
             while ((current = queue.set.nextSetBit(prior + 1)) != -1) {
                 if (current != prior + 1) {
                     writer.flush();
-                    searchFormat.seek(current, storage.peek());
+                    dataLayout.seek(current, storage.peek());
                 }
                 serialize(writer, prior = current);
             }
@@ -229,7 +244,7 @@ public class PersistentArray<Type> implements AutoCloseable {
     @SuppressWarnings("unchecked")
     private void
     serialize(OutputWriter writer, int index) throws IOException {
-        if (loaded.get(index)) writer.write(SerializerStorage.get(type).serialize((Type) data[index]));
+        if (lruCache.cached(index)) writer.write(SerializerStorage.get(type).serialize((Type) data[index]));
     }
 
     private void
@@ -239,10 +254,10 @@ public class PersistentArray<Type> implements AutoCloseable {
         try (storage) {
             RandomAccessFile raf = storage.get();
             InputStream fis = new BufferedInputStream(new FileInputStream(raf.getFD()), configuration.file().buffer());
-            searchFormat.seek(index, raf);
+            dataLayout.seek(index, raf);
             byte[] datum = new byte[SerializerStorage.get(type).descriptor().size()];
             for (int offset = index; offset < Math.min(index + size, data.length); offset++) {
-                if (loaded.get(offset)) continue;
+                if (lruCache.cached(offset)) continue;
                 int ignore = fis.read(datum);
                 assert ignore == datum.length;
                 associate(offset, SerializerStorage.get(type).deserialize(datum));
@@ -252,60 +267,65 @@ public class PersistentArray<Type> implements AutoCloseable {
         }
     }
 
-    public static <Type extends FixedSizeObject> PersistentArray<Type>
-    deserialize(TypeDescriptor<Type> type, Configuration configuration, boolean lazy) {
+    @Override
+    public void
+    close() {
+        flush();
+        storage.closeFile();
+    }
+
+    public void
+    flush() {
+        if (configuration.write().chunked()) {
+            serialiseChunk();
+            queue.clear();
+        }
+    }
+
+    public static <Type> PersistentArray<Type>
+    deserialize(TypeDescriptor<Type> type, Configuration configuration) {
         assert type != null && configuration != null;
 
         try (RandomAccessFile raf = new RandomAccessFile(configuration.file().path().toFile(), "rw");
              InputStream input = new BufferedInputStream(new FileInputStream(raf.getFD()))) {
             Serializer<Integer> integer = SerializerStorage.INTEGER;
             byte[] header = new byte[HEADER_SIZE];
-            int ignore = input.read(header), loaded = 0;
+            int ignore = input.read(header);
             assert ignore == header.length;
-            SearchFormat searchFormat = SearchFormat.which(validHeader(header), type).init(raf);
+            DataLayout dataLayout = DataLayout.which(validHeader(header), type).init(raf);
             int length = integer.deserialize(header, HEADER_SIZE - 2 * integer.descriptor().size());
-            Serializer<Type> serializer = SerializerStorage.get(type);
-            int size = serializer.descriptor().size();
-            byte[] datum = new byte[size];
-            Object[] data = new Object[length];
-            if (!lazy)
-                for (int index = 0; index < length; index++, loaded++) {
-                    ignore = input.read(datum);
-                    assert ignore == size;
-                    data[index] = serializer.deserialize(datum);
-                }
-            return new PersistentArray<>(type, data, loaded(length, loaded), searchFormat, configuration);
+            return new PersistentArray<>(type, new Object[length], dataLayout, configuration);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public interface SearchFormat {
+    public interface DataLayout {
         void seek(int index, RandomAccessFile raf) throws IOException;
 
-        default SearchFormat
+        default DataLayout
         init(RandomAccessFile raf) throws IOException {
             return this;
         }
 
-        static SearchFormat
+        static DataLayout
         which(byte format, TypeDescriptor<?> descriptor) {
             return switch (format & 0b0000011) {
-                case 0 -> new VariableSearchFormat();
-                case 1 -> new FixedSearchFormat(descriptor);
+                case 0 -> new VariableObjectLayout();
+                case 1 -> new FixedObjectLayout(descriptor);
                 default -> throw new UnsupportedOperationException();
             };
         }
     }
 
-    static final class VariableSearchFormat implements SearchFormat {
+    static final class VariableObjectLayout implements DataLayout {
         private boolean cached;
         private Path offset;
 
         @Override
-        public SearchFormat init(RandomAccessFile raf) throws IOException {
+        public DataLayout init(RandomAccessFile raf) throws IOException {
             // read offset and its configuration
-            return SearchFormat.super.init(raf);
+            return DataLayout.super.init(raf);
         }
 
         @Override
@@ -319,7 +339,14 @@ public class PersistentArray<Type> implements AutoCloseable {
         }
     }
 
-    record FixedSearchFormat(TypeDescriptor<?> descriptor) implements SearchFormat {
+    /**
+     * Describes a fixed object data layout. Each object in such a layout has a fixed size it can occupy in the output
+     * file. This layout can be beneficial for fixed size data types, such as integers or composite data types
+     * consistent with fixed size data types. For large data sets, this data layout saves space on disk, however, for
+     * small arrays it will create unnecessary overhead.
+     * @param descriptor
+     */
+    public record FixedObjectLayout(TypeDescriptor<?> descriptor) implements DataLayout {
         @Override
         public void seek(int index, RandomAccessFile raf) throws IOException {
             raf.seek((long) index * descriptor.size() + PersistentArray.HEADER_SIZE);
@@ -353,65 +380,6 @@ public class PersistentArray<Type> implements AutoCloseable {
         return loaded;
     }
 
-    @Override
-    public void
-    close() {
-        flush();
-        storage.closeFile();
-    }
-
-    public void
-    flush() {
-        if (configuration.write().chunked()) {
-            serialiseChunk();
-            queue.clear();
-        }
-    }
-
-    static class References<Type> extends ReferenceQueue<Type> {
-
-        int count = 0;
-        BitSet cleared = new BitSet();
-
-        void
-        clear(int index) {
-            cleared.set(index, true);
-        }
-
-        void
-        take(int index) {
-            cleared.set(index, false);
-            cleanup();
-        }
-
-        boolean
-        cleared(int index) {
-            return cleared.get(index);
-        }
-
-        void
-        cleanup() {
-            int collected = 0;
-            while (collected++ < count) {
-                LazyReference<? extends Type> reference = (LazyReference<? extends Type>) poll();
-                if (reference == null) return;
-                clear(reference.index);
-            }
-        }
-    }
-
-    static class LazyReference<Type> extends SoftReference<Type> {
-
-        int index;
-
-        public LazyReference(int index, Type referent, References<Type> queue) {
-            super(referent, queue);
-            queue.take(this.index = index);
-            queue.cleanup();
-        }
-
-    }
-
     private static class ChunkQueue {
         private final BitSet set;
         private final int capacity;
@@ -440,6 +408,93 @@ public class PersistentArray<Type> implements AutoCloseable {
             this.first = Integer.MAX_VALUE;
         }
 
+    }
+
+    private static class LRUCache {
+        private final Map<Integer, Node> nodes = new HashMap<>();
+        private final int capacity;
+        private final Node head;
+        private final Node tail;
+
+        public LRUCache(int capacity) {
+            this.head = new Node(-1);
+            this.tail = new Node(-1);
+            this.head.next = this.tail;
+            this.tail.prev = this.head;
+            this.capacity = capacity;
+        }
+
+        public void
+        raise(int key) {
+            if (capacity < 0) return;
+            Node node = nodes.get(key);
+            remove(node);
+            add(node);
+        }
+
+        public boolean
+        cached(int key) {
+            return nodes.containsKey(key);
+        }
+
+        public int
+        cache(int key) {
+            Node node = new Node(key);
+            nodes.put(key, node);
+            if (capacity < 0) return -1;
+            add(node);
+
+            if (nodes.size() > capacity) return pushout();
+            else return -1;
+        }
+
+        public void
+        clear() {
+            this.head.next = this.tail;
+            this.tail.prev = this.head;
+            nodes.clear();
+        }
+
+        public void
+        clear(int index) {
+            Node node = nodes.get(index);
+            remove(node);
+            nodes.remove(index);
+        }
+
+        private int pushout() {
+            Node toRemove = head.next;
+            remove(toRemove);
+            nodes.remove(toRemove.key);
+            return toRemove.key;
+        }
+
+        private void
+        add(Node node) {
+            Node prev = tail.prev;
+            prev.next = node;
+            node.next = tail;
+            node.prev = prev;
+            tail.prev = node;
+        }
+
+        private void
+        remove(Node node) {
+            node.prev.next = node.next;
+            node.next.prev = node.prev;
+            node.next = null;
+            node.prev = null;
+        }
+
+        private static class Node {
+            private final int key;
+            private Node next;
+            private Node prev;
+
+            public Node(int key) {
+                this.key = key;
+            }
+        }
     }
 
 }
