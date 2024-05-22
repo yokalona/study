@@ -3,11 +3,11 @@ package com.yokalona.array.lazy.subscriber;
 public interface Subscriber {
 
     default void
-    onSerialization(int index) {
+    onSerialized(int index) {
     }
 
     default void
-    onDeserialization(int index) {
+    onDeserialized(int index) {
     }
 
     default void

@@ -246,7 +246,7 @@ public class PersistentArray<Type> implements AutoCloseable {
     serialize(OutputWriter writer, int index) throws IOException {
         if (lruCache.cached(index)) {
             writer.write(SerializerStorage.get(type).serialize((Type) data[index]));
-            for (Subscriber subscriber : configuration.subscribers()) subscriber.onSerialization(index);
+            for (Subscriber subscriber : configuration.subscribers()) subscriber.onSerialized(index);
         }
     }
 
@@ -260,11 +260,14 @@ public class PersistentArray<Type> implements AutoCloseable {
             dataLayout.seek(index, raf);
             byte[] datum = new byte[SerializerStorage.get(type).descriptor().size()];
             for (int offset = index; offset < Math.min(index + size, data.length); offset++) {
-                if (lruCache.cached(offset)) continue;
+                if (lruCache.cached(offset)) {
+                    dataLayout.seek(offset, raf);
+                    return;
+                }
                 int ignore = fis.read(datum);
                 assert ignore == datum.length;
                 associate(offset, SerializerStorage.get(type).deserialize(datum));
-                for (Subscriber subscriber : configuration.subscribers()) subscriber.onDeserialization(index);
+                for (Subscriber subscriber : configuration.subscribers()) subscriber.onDeserialized(offset);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -288,9 +291,14 @@ public class PersistentArray<Type> implements AutoCloseable {
 
     public static <Type> PersistentArray<Type>
     deserialize(TypeDescriptor<Type> type, Configuration configuration) {
-        assert type != null && configuration != null;
+        return deserialize(type, configuration, new TreeSet<>());
+    }
 
-        try (RandomAccessFile raf = new RandomAccessFile(configuration.file().path().toFile(), "rw");
+    public static <Type> PersistentArray<Type>
+    deserialize(TypeDescriptor<Type> type, Configuration configuration, TreeSet<Integer> preload) {
+        assert type != null && configuration != null && preload != null;
+
+        try (RandomAccessFile raf = new RandomAccessFile(configuration.file().path().toFile(), "r");
              InputStream input = new BufferedInputStream(new FileInputStream(raf.getFD()))) {
             Serializer<Integer> integer = SerializerStorage.INTEGER;
             byte[] header = new byte[HEADER_SIZE];
@@ -298,7 +306,11 @@ public class PersistentArray<Type> implements AutoCloseable {
             assert ignore == header.length;
             DataLayout dataLayout = DataLayout.which(validHeader(header), type).init(raf);
             int length = integer.deserialize(header, HEADER_SIZE - 2 * integer.descriptor().size());
-            return new PersistentArray<>(type, new Object[length], dataLayout, configuration);
+            PersistentArray<Type> array = new PersistentArray<>(type, new Object[length], dataLayout, configuration);
+            int boundary = configuration.memory().count();
+            Iterator<Integer> iterator = preload.iterator();
+            for (int index = 0; index < Math.min(boundary, preload.size()); index ++) array.get(iterator.next());
+            return array;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -377,18 +389,12 @@ public class PersistentArray<Type> implements AutoCloseable {
         return String.format("%d.%d.%d", version[offset], version[offset + 1], version[offset + 2]);
     }
 
-    private static BitSet
-    loaded(int length, int size) {
-        BitSet loaded = new BitSet(length);
-        loaded.set(0, size, true);
-        return loaded;
-    }
-
     private static class ChunkQueue {
         private final BitSet set;
         private final int capacity;
-        private int first = Integer.MAX_VALUE;
+
         private int count = 0;
+        private int first = Integer.MAX_VALUE;
 
         public ChunkQueue(int capacity) {
             this.capacity = capacity;
@@ -415,10 +421,10 @@ public class PersistentArray<Type> implements AutoCloseable {
     }
 
     private static class LRUCache {
-        private final Map<Integer, Node> nodes = new HashMap<>();
-        private final int capacity;
         private final Node head;
         private final Node tail;
+        private final int capacity;
+        private final Map<Integer, Node> nodes = new HashMap<>();
 
         public LRUCache(int capacity) {
             this.head = new Node(-1);

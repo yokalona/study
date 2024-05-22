@@ -2,8 +2,8 @@ package com.yokalona.array.lazy.configuration;
 
 import com.yokalona.array.lazy.subscriber.Subscriber;
 
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 
 import static java.util.Collections.unmodifiableList;
 
@@ -41,7 +41,7 @@ public record Configuration(File file, Chunked read, Chunked write, List<Subscri
     public static final class ConfigurationBuilder implements MemoryLeft, ChunkLeft {
         private final File file;
         private final List<Subscriber> subscribers = new ArrayList<>();
-        private InMemory memory = new InMemory(-1);
+        private InMemory memory = new InMemory(1);
 
         public ConfigurationBuilder(File file) {
             this.file = file;
