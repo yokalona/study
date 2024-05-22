@@ -126,6 +126,7 @@ public class PersistentArray<Type> implements AutoCloseable {
     /**
      * Returns item from the array. Loads from disk if necessary. Depending on configuration, may unload the least
      * recently used item in an array that is loaded into memory.
+     *
      * @param index of item to return
      * @return always loaded item in the array. It is guaranteed that the returned item is at the time of return is
      * fully loaded into memory. To override this behavior, one might use proxy classes.
@@ -138,6 +139,8 @@ public class PersistentArray<Type> implements AutoCloseable {
         if (lruCache.cached(index)) lruCache.raise(index);
         else load(index);
 
+        assert lruCache.nodes.size() <= configuration.memory().count();
+
         return (Type) data[index];
     }
 
@@ -149,6 +152,8 @@ public class PersistentArray<Type> implements AutoCloseable {
         if (configuration.write().chunked()) {
             if (queue.add(index)) flush();
         } else serialise(index);
+
+        assert lruCache.nodes.size() <= configuration.memory().count();
     }
 
     public int
@@ -168,6 +173,11 @@ public class PersistentArray<Type> implements AutoCloseable {
         Arrays.fill(data, null);
         lruCache.clear();
         queue.clear();
+    }
+
+    private void
+    unload() {
+        for (int index : lruCache.nodes.keySet()) unload(index);
     }
 
     private void
@@ -279,6 +289,7 @@ public class PersistentArray<Type> implements AutoCloseable {
     close() {
         flush();
         storage.closeFile();
+        unload();
     }
 
     public void
@@ -287,6 +298,12 @@ public class PersistentArray<Type> implements AutoCloseable {
             serialiseChunk();
             queue.clear();
         }
+    }
+
+    public static <Type> void
+    copy(PersistentArray<Type> from, int position, PersistentArray<Type> to, int destination, int length) {
+        for (int index = 0; index < length; index++)
+            to.set(destination++, from.get(position++));
     }
 
     public static <Type> PersistentArray<Type>
@@ -309,7 +326,7 @@ public class PersistentArray<Type> implements AutoCloseable {
             PersistentArray<Type> array = new PersistentArray<>(type, new Object[length], dataLayout, configuration);
             int boundary = configuration.memory().count();
             Iterator<Integer> iterator = preload.iterator();
-            for (int index = 0; index < Math.min(boundary, preload.size()); index ++) array.get(iterator.next());
+            for (int index = 0; index < Math.min(boundary, preload.size()); index++) array.get(iterator.next());
             return array;
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -360,6 +377,7 @@ public class PersistentArray<Type> implements AutoCloseable {
      * file. This layout can be beneficial for fixed size data types, such as integers or composite data types
      * consistent with fixed size data types. For large data sets, this data layout saves space on disk, however, for
      * small arrays it will create unnecessary overhead.
+     *
      * @param descriptor
      */
     public record FixedObjectLayout(TypeDescriptor<?> descriptor) implements DataLayout {

@@ -25,8 +25,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class PersistentArrayTest {
 
-    public static final int REPEATS = Power.two(10);
-    private static final int[] size = {Power.two(10), Power.two(15)};
+    public static final int REPEATS = Power.two(5);
+    private static final int[] size = {Power.two(5), Power.two(10), Power.two(15)};
     private static final int[] memory = {Power.two(5), Power.two(10)};
     private static final int[] read = {Power.two(5), Power.two(10)};
     private static final int[] write = {Power.two(5), Power.two(10)};
@@ -54,7 +54,7 @@ class PersistentArrayTest {
                 assertTrue(subscriber.unload.isEmpty());
             }
         }
-        assertTrue(subscriber.unload.isEmpty());
+        assertFalse(subscriber.unload.isEmpty());
     }
 
     @Test
@@ -72,7 +72,7 @@ class PersistentArrayTest {
                 assertTrue(subscriber.unload.isEmpty());
             }
         }
-        assertTrue(subscriber.unload.isEmpty());
+        assertFalse(subscriber.unload.isEmpty());
     }
 
     @Test
@@ -191,7 +191,32 @@ class PersistentArrayTest {
             long fileSize = Files.size(configuration.file().path());
             long lread = readLinear(test.size, configuration);
             long rread = readRandom(test.size, configuration);
-            printResults(true, i, REPEATS, test, lwrite, rwrite, fileSize, lread, rread);
+            printResults(true, i, test, lwrite, rwrite, fileSize, lread, rread);
+        }
+    }
+
+    @Test
+    public void
+    testMerge() {
+        TestSubscriber subscriber = new TestSubscriber();
+        Configuration configuration1 = configure(
+                file(path.resolve("merge1.la")).mode(RWD).cached())
+                .memory(memorise(1))
+                .addSubscriber(subscriber)
+                .read(chunked(10))
+                .write(chunked(10));
+        Configuration configuration2 = configure(
+                file(path.resolve("merge2.la")).mode(RWD).cached())
+                .memory(memorise(1))
+                .addSubscriber(subscriber)
+                .read(chunked(10))
+                .write(chunked(10));
+        writeLinear(1000, configuration1);
+        try (var array1 = PersistentArray.deserialize(CompactInteger.descriptor, configuration1);
+             var array2 = new PersistentArray<>(1000, CompactInteger.descriptor, new PersistentArray.FixedObjectLayout(CompactInteger.descriptor), configuration2)) {
+            for (int index = 0; index < array2.length(); index++) assertNull(array2.get(index));
+            PersistentArray.copy(array1, 0, array2, 0, 1000);
+            for (int index = 0; index < array2.length(); index++) assertEquals(index, array2.get(index).value());
         }
     }
 
@@ -250,7 +275,7 @@ class PersistentArrayTest {
     }
 
     private static void
-    printResults(boolean print, int repeat, int overall, PersistenceTest test, long lwrite, long rwrite, long fileSize,
+    printResults(boolean print, int repeat, PersistenceTest test, long lwrite, long rwrite, long fileSize,
                  long lread, long rread) {
         if (!print) return;
         System.out.printf("""
@@ -268,7 +293,7 @@ class PersistentArrayTest {
                         |         Linear read:                    | %10d ms      |
                         |         Random read:                    | %10d ms      |
                         |     File size:                          | %13s      |%n""",
-                repeat, overall, test.size, test.memory, ' ', test.read, test.write, ' ', lwrite, rwrite, lread, rread, getSize(fileSize));
+                repeat, PersistentArrayTest.REPEATS, test.size, test.memory, ' ', test.read, test.write, ' ', lwrite, rwrite, lread, rread, getSize(fileSize));
     }
 
     record PersistenceTest(int size, int memory, int read, int write) {
