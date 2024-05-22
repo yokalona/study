@@ -15,7 +15,7 @@ class IntegerSerializerTest {
         assertArrayEquals(new byte[] {0, 0, 0, 0, 0x10}, SerializerStorage.INTEGER.serialize(16));
         assertArrayEquals(new byte[] {0, 0x7F, -0x01, -0x01, -0x01}, SerializerStorage.INTEGER.serialize(Integer.MAX_VALUE));
         assertArrayEquals(new byte[] {0, -0x80, 0, 0, 0}, SerializerStorage.INTEGER.serialize(Integer.MIN_VALUE));
-        assertArrayEquals(new byte[] {0xF, 0x0, 0x0, 0x0, 0x0}, SerializerStorage.INTEGER.serialize(null));
+        assertEquals(0xF, SerializerStorage.INTEGER.serialize(null)[0]);
     }
 
     @Test

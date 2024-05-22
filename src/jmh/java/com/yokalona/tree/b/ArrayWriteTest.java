@@ -1,6 +1,5 @@
 package com.yokalona.tree.b;
 
-import com.yokalona.array.lazy.Configuration;
 import com.yokalona.array.lazy.PersistentArray;
 import com.yokalona.array.lazy.serializers.Serializer;
 import com.yokalona.array.lazy.serializers.SerializerStorage;
@@ -17,10 +16,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
-import static com.yokalona.array.lazy.Configuration.Chunked.chunked;
-import static com.yokalona.array.lazy.Configuration.Chunked.linear;
-import static com.yokalona.array.lazy.Configuration.File.file;
-import static com.yokalona.array.lazy.Configuration.configure;
+import static com.yokalona.array.lazy.configuration.Chunked.chunked;
+import static com.yokalona.array.lazy.configuration.Chunked.linear;
+import static com.yokalona.array.lazy.configuration.File.file;
+import static com.yokalona.array.lazy.configuration.Configuration.InMemory.memorise;
+import static com.yokalona.array.lazy.configuration.Configuration.configure;
 
 @State(Scope.Benchmark)
 public class ArrayWriteTest {
@@ -91,7 +91,7 @@ public class ArrayWriteTest {
                     configure(
                             file(path.resolve("array.la"))
                             .cached())
-                            .memory(Configuration.InMemory.memorise(memory))
+                            .memory(memorise(memory))
                             .read(linear())
                             .write(linear()));
             data = new int[size];

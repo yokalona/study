@@ -1,8 +1,10 @@
 package com.yokalona.array.lazy;
 
+import com.yokalona.array.lazy.configuration.Configuration;
 import com.yokalona.array.lazy.serializers.Serializer;
 import com.yokalona.array.lazy.serializers.SerializerStorage;
 import com.yokalona.array.lazy.serializers.TypeDescriptor;
+import com.yokalona.array.lazy.subscriber.Subscriber;
 
 import java.io.BufferedInputStream;
 import java.io.FileInputStream;
@@ -11,10 +13,7 @@ import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 
 /**
@@ -102,11 +101,10 @@ public class PersistentArray<Type> implements AutoCloseable {
     private final ChunkQueue queue;
     private final LRUCache lruCache;
     private final CachedFile storage;
+    private final byte[] reusableBuffer;
     private final DataLayout dataLayout;
     private final TypeDescriptor<Type> type;
     public final Configuration configuration;
-
-    private final byte[] reusableBuffer;
 
     private PersistentArray(TypeDescriptor<Type> type, Object[] data, DataLayout dataLayout,
                             Configuration configuration) {
@@ -178,6 +176,7 @@ public class PersistentArray<Type> implements AutoCloseable {
         assert index < data.length;
 
         data[index] = null;
+        for (Subscriber subscriber : configuration.subscribers()) subscriber.onUnload(index);
     }
 
     @SuppressWarnings("unchecked")
@@ -206,6 +205,7 @@ public class PersistentArray<Type> implements AutoCloseable {
 
     private void associate(int index, Type value) {
         data[index] = value;
+        for (Subscriber subscriber : configuration.subscribers()) subscriber.onLoad(index);
         int pushed = lruCache.cache(index);
         unload(pushed);
     }
@@ -244,7 +244,10 @@ public class PersistentArray<Type> implements AutoCloseable {
     @SuppressWarnings("unchecked")
     private void
     serialize(OutputWriter writer, int index) throws IOException {
-        if (lruCache.cached(index)) writer.write(SerializerStorage.get(type).serialize((Type) data[index]));
+        if (lruCache.cached(index)) {
+            writer.write(SerializerStorage.get(type).serialize((Type) data[index]));
+            for (Subscriber subscriber : configuration.subscribers()) subscriber.onSerialization(index);
+        }
     }
 
     private void
@@ -261,6 +264,7 @@ public class PersistentArray<Type> implements AutoCloseable {
                 int ignore = fis.read(datum);
                 assert ignore == datum.length;
                 associate(offset, SerializerStorage.get(type).deserialize(datum));
+                for (Subscriber subscriber : configuration.subscribers()) subscriber.onDeserialization(index);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);

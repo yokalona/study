@@ -1,6 +1,7 @@
 package com.yokalona.array.lazy;
 
-import com.yokalona.array.lazy.Configuration.File;
+import com.yokalona.array.lazy.configuration.Configuration;
+import com.yokalona.array.lazy.configuration.File;
 import com.yokalona.array.lazy.serializers.Serializer;
 import com.yokalona.array.lazy.serializers.SerializerStorage;
 import com.yokalona.array.lazy.serializers.TypeDescriptor;
@@ -14,13 +15,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
-import static com.yokalona.array.lazy.Configuration.Chunked.chunked;
-import static com.yokalona.array.lazy.Configuration.Chunked.linear;
-import static com.yokalona.array.lazy.Configuration.File.Mode.*;
-import static com.yokalona.array.lazy.Configuration.File.file;
-import static com.yokalona.array.lazy.Configuration.InMemory.memorise;
-import static com.yokalona.array.lazy.Configuration.InMemory.none;
-import static com.yokalona.array.lazy.Configuration.configure;
+import static com.yokalona.array.lazy.configuration.Chunked.chunked;
+import static com.yokalona.array.lazy.configuration.Chunked.linear;
+import static com.yokalona.array.lazy.configuration.File.Mode.*;
+import static com.yokalona.array.lazy.configuration.File.file;
+import static com.yokalona.array.lazy.configuration.Configuration.InMemory.memorise;
+import static com.yokalona.array.lazy.configuration.Configuration.InMemory.none;
+import static com.yokalona.array.lazy.configuration.Configuration.configure;
 import static org.junit.jupiter.api.Assertions.*;
 
 class PersistentArrayTest {

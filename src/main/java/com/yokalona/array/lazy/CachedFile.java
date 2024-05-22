@@ -1,22 +1,31 @@
 package com.yokalona.array.lazy;
 
+import com.yokalona.TestOnly;
+import com.yokalona.array.lazy.configuration.File;
+
 import java.io.FileNotFoundException;
 import java.io.RandomAccessFile;
 
-class CachedFile implements AutoCloseable {
+public class CachedFile implements AutoCloseable {
+    private final File configuration;
     private RandomAccessFile file;
-    private final Configuration.File configuration;
 
-    public CachedFile(Configuration.File configuration) {
+    public CachedFile(File configuration) {
+        this.configuration = configuration;
+    }
+
+    @TestOnly
+    CachedFile(File configuration, RandomAccessFile file) {
+        this.file = file;
         this.configuration = configuration;
     }
 
     public RandomAccessFile
     get() {
         try {
-            if (!configuration.cached() || file == null)
-                return file = new RandomAccessFile(configuration.path().toFile(), configuration.mode().mode());
-            else return file;
+            return (!configuration.cached() || file == null)
+                    ? file = new RandomAccessFile(configuration.path().toFile(), configuration.mode().mode())
+                    : file;
         } catch (FileNotFoundException e) {
             throw new RuntimeException(e);
         }
