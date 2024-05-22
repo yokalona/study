@@ -20,6 +20,10 @@ class BTreeTest {
     public static final Boolean VERBOSE = true;
     public static final Random RANDOM = new Random();
 
+    static {
+        DataBlock.ENABLE_CHECK = true;
+    }
+
     @ParameterizedTest
     @MethodSource("loadParameters")
     public void remove(int[] parameters) {
@@ -102,7 +106,7 @@ class BTreeTest {
         for (int i = 1; i < Math.min(data.length, 1000); i++) {
             sb.append(' ').append(data[i]);
         }
-        printf(message, sb.append("..."));
+        if (data.length > 1000) printf(message, sb.append("..."));
     }
 
     @ParameterizedTest
@@ -315,20 +319,6 @@ class BTreeTest {
         println("OK");
         testSizeAndGrowthRate(bTree, capacity, parameters[TEST_SIZE]);
         System.out.println();
-    }
-
-    @Test
-    public void test() {
-        BTree<Integer, Integer> bTree = new BTree<>(4);
-
-        Integer[] data = new Integer[1000000];
-        for (int testSize = 0; testSize < data.length; testSize++)
-            data[testSize] = testSize;
-        shuffle(data);
-
-        System.out.println("Filling...");
-        for (int sample : data) bTree.insert(sample, sample);
-        testSizeAndGrowthRate(bTree, 4, 1000000);
     }
 
     @ParameterizedTest

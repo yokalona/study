@@ -19,6 +19,7 @@ public class PerformanceTest {
                 .include(BTreeGetPerformanceTest.class.getSimpleName())
                 .include(BTreeInsertPerformanceTest.class.getSimpleName())
                 .include(BTreeRemovePerformanceTest.class.getSimpleName())
+                .include(ArrayWriteTest.class.getSimpleName())
                 .build();
 
         new Runner(options).run();

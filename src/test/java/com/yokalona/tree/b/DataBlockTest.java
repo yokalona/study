@@ -1,20 +1,28 @@
 package com.yokalona.tree.b;
 
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 class DataBlockTest {
 
+    String fileName = "test-" + getClass().getSimpleName() + ".db";
+
     @Test
     public void testInsert() {
-        DataBlock<Integer, Datapoint> dataBlock = new DataBlock<>(() -> new Datapoint[10]);
+        Loader<Integer, Integer> loader = new Loader<>(fileName, 10);
+        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, true);
         assertEquals(0, dataBlock.size());
         assertEquals(10, dataBlock.length());
 
-        for (int sample = 0; sample < 10; sample ++) {
-            dataBlock.insert(new Datapoint(sample));
+        for (int sample = 0; sample < 10; sample++) {
+            dataBlock.insert(sample, sample, sample);
             assertTrue(dataBlock.isOrdered());
             dataBlock.checkConsistency();
         }
@@ -25,25 +33,20 @@ class DataBlockTest {
 
     @Test
     public void testFind() {
-        DataBlock<Integer, Datapoint> dataBlock = new DataBlock<>(() -> new Datapoint[10]);
-        for (int sample = 0; sample < 10; sample ++) dataBlock.insert(new Datapoint(sample));
+        Loader<Integer, Integer> loader = new Loader<>(fileName, 10);
+        DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, true);
+        for (int sample = 0; sample < 10; sample++) dataBlock.insert(sample, sample, sample);
         assertEquals(10, dataBlock.size());
         assertTrue(dataBlock.isOrdered());
-        for (int sample = 0; sample < 10; sample ++) assertEquals(sample, dataBlock.find.equal(sample));
-        for (int sample = 0; sample < 10; sample ++) assertEquals(sample - 1, dataBlock.find.lessThan(sample));
-        for (int sample = 0; sample < 10; sample ++) assertEquals(sample + 1, dataBlock.find.greaterThan(sample));
+        for (int sample = 0; sample < 10; sample++) assertEquals(sample, dataBlock.equal(sample));
+        for (int sample = 0; sample < 10; sample++) assertEquals(sample - 1, dataBlock.lessThan(sample));
+        for (int sample = 0; sample < 10; sample++) assertEquals(sample + 1, dataBlock.greaterThan(sample));
 
-        for (int sample = 10; sample < 20; sample ++) assertEquals(-11, dataBlock.find.equal(sample));
-        for (int sample = -1; sample > -11; sample --) assertEquals(-1, dataBlock.find.equal(sample));
+        for (int sample = 10; sample < 20; sample++) assertEquals(- 11, dataBlock.equal(sample));
+        for (int sample = - 1; sample > - 11; sample--) assertEquals(- 1, dataBlock.equal(sample));
 
         dataBlock.remove(5);
-        assertEquals(5, dataBlock.find.equal(6));
-
-
-    }
-
-    private record Datapoint(Integer key) implements HasKey<Integer> {
-
+        assertEquals(5, dataBlock.equal(6));
     }
 
 }
