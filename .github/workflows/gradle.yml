@@ -42,15 +42,6 @@ jobs:
           **/build/reports/
           **/build/test-results/
 
-    - name: JMH Action
-      run: ./gradlew jmh
-
-    - name: JMH Benchmark upload
-      uses: actions/upload-artifact@v4
-      with:
-        name: benchmark.json
-        path: build/benchmarks/output.json
-
   dependency-submission:
 
     runs-on: ubuntu-latest

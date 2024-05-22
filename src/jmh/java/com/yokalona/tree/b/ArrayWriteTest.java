@@ -164,17 +164,6 @@ public class ArrayWriteTest {
         arr[right] = tmp;
     }
 
-    public static void main(String[] args) throws RunnerException {
-        Options options = new OptionsBuilder()
-                .forks(1)
-                .resultFormat(ResultFormatType.JSON)
-                .result("benchmarks/output-array.json")
-                .include(ArrayWriteTest.class.getSimpleName())
-                .build();
-
-        new Runner(options).run();
-    }
-
     static long kilo = 1024;
     static long mega = kilo * kilo;
     static long giga = mega * kilo;
