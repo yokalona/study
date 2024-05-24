@@ -101,14 +101,13 @@ public class PersistentArray<Type> implements AutoCloseable {
 
     private final int length;
     private final Object[] data;
+    private final int[] indices;
     private final ChunkQueue queue;
-//    private final LRUCache lruCache;
 
     private final CachedFile storage;
     private final byte[] reusableBuffer;
     private final DataLayout dataLayout;
     private final TypeDescriptor<Type> type;
-    private final FixedBiDirectionalMap read;
     public final Configuration configuration;
 
     private PersistentArray(int length, TypeDescriptor<Type> type, Object[] data, LayoutProvider layoutProvider,
@@ -118,10 +117,10 @@ public class PersistentArray<Type> implements AutoCloseable {
         this.length = length;
         this.configuration = configuration;
         this.dataLayout = layoutProvider.provide(type);
-        this.read = new FixedBiDirectionalMap(data.length);
+        this.indices = new int[data.length];
+        Arrays.fill(this.indices, -1);
         this.storage = new CachedFile(configuration.file());
         this.queue = new ChunkQueue(configuration.write().size());
-//        this.lruCache = new LRUCache(configuration.memory().count());
         this.reusableBuffer = new byte[configuration.file().buffer()];
     }
 
@@ -143,32 +142,38 @@ public class PersistentArray<Type> implements AutoCloseable {
     get(int index) {
         assert index >= 0 && index < length;
 
-        if (!read.containsKey(index)) load(index);
+        if (!contains(index)) load(index);
+        return (Type) data[index % data.length];
+    }
 
-        return (Type) data[read.getKey(index)];
+    private boolean
+    contains(int index) {
+        return indices[index % indices.length] == index;
     }
 
     public final void
     set(int index, Type value) {
         assert index >= 0 && index < length;
 
+        if (taken(index) && queue.contains(indices[index % indices.length])) {
+            flush();
+            for (Subscriber subscriber : configuration.subscribers()) subscriber.onCollision(indices[index % indices.length], index);
+        }
+
         associate(index, value);
         if (configuration.write().chunked()) {
             if (queue.add(index)) flush();
         } else serialise(index);
+    }
 
-//        assert lruCache.nodes.size() <= configuration.memory().count();
+    private boolean
+    taken(int index) {
+        return indices[index % indices.length] >= 0;
     }
 
     public int
     length() {
-        return data.length;
-    }
-
-    public int
-    loaded() {
-//        return lruCache.nodes.size();
-        return 0;
+        return length;
     }
 
     public void
@@ -176,21 +181,7 @@ public class PersistentArray<Type> implements AutoCloseable {
         close();
         Files.deleteIfExists(configuration.file().path());
         Arrays.fill(data, null);
-//        lruCache.clear();
         queue.clear();
-    }
-
-    private void
-    unload() {
-//        for (int index : lruCache.nodes.keySet()) unload(index);
-    }
-
-    private void
-    unload(int index) {
-        if (index < 0) return;
-        assert index < length;
-
-        data[index % configuration.memory().size()] = null;
     }
 
     private void
@@ -204,9 +195,7 @@ public class PersistentArray<Type> implements AutoCloseable {
             writer.write(integer.serialize(length));
             Serializer<Type> serializer = SerializerStorage.get(type);
             writer.write(integer.serialize(serializer.descriptor().size()));
-            for (int index = 0; index < length; index ++) {
-                writer.write(serializer.serialize(null));
-            }
+            for (int index = 0; index < length; index++) writer.write(serializer.serialize(null));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -218,8 +207,8 @@ public class PersistentArray<Type> implements AutoCloseable {
     }
 
     private void associate(int index, Type value) {
-        data[index % configuration.memory().size()] = value;
-        read.put(index, index % configuration.memory().size());
+        indices[index % indices.length] = index;
+        data[index % data.length] = value;
     }
 
     private void
@@ -256,11 +245,9 @@ public class PersistentArray<Type> implements AutoCloseable {
     @SuppressWarnings("unchecked")
     private void
     serialize(OutputWriter writer, int index) throws IOException {
-        if (!read.containsKey(index)) return;
-//        get(index);
-            writer.write(SerializerStorage.get(type).serialize((Type) data[read.getKey(index)]));
-            for (Subscriber subscriber : configuration.subscribers()) subscriber.onSerialized(index);
-//        }
+        if (!contains(index)) return;
+        writer.write(SerializerStorage.get(type).serialize((Type) data[index % data.length]));
+        for (Subscriber subscriber : configuration.subscribers()) subscriber.onSerialized(index);
     }
 
     private void
@@ -269,16 +256,10 @@ public class PersistentArray<Type> implements AutoCloseable {
 
         try (storage) {
             RandomAccessFile raf = storage.get();
-            InputStream fis = new BufferedInputStream(new FileInputStream(raf.getFD()), configuration.file().buffer());
             dataLayout.seek(index, raf);
-            boolean shouldSeek = false;
             byte[] datum = new byte[SerializerStorage.get(type).descriptor().size()];
             for (int offset = index; offset < Math.min(index + size, length); offset++) {
-                if (read.containsKey(offset)) {
-                    shouldSeek = true;
-                    continue;
-                } else if (shouldSeek) dataLayout.seek(offset, raf);
-                int ignore = fis.read(datum);
+                int ignore = raf.read(datum);
                 assert ignore == datum.length;
                 associate(offset, SerializerStorage.get(type).deserialize(datum));
                 for (Subscriber subscriber : configuration.subscribers()) subscriber.onDeserialized(offset);
@@ -293,7 +274,6 @@ public class PersistentArray<Type> implements AutoCloseable {
     close() {
         flush();
         storage.closeFile();
-        unload();
     }
 
     public void
@@ -429,6 +409,11 @@ public class PersistentArray<Type> implements AutoCloseable {
             return count == capacity;
         }
 
+        boolean
+        contains(int index) {
+            return set.get(index);
+        }
+
         void
         clear() {
             this.set.clear();
@@ -436,162 +421,6 @@ public class PersistentArray<Type> implements AutoCloseable {
             this.first = Integer.MAX_VALUE;
         }
 
-    }
-
-    private static class LRUCache {
-        private final Node head;
-        private final Node tail;
-        private final int capacity;
-        private final Map<Integer, Node> nodes = new HashMap<>();
-
-        public LRUCache(int capacity) {
-            this.head = new Node(-1);
-            this.tail = new Node(-1);
-            this.head.next = this.tail;
-            this.tail.prev = this.head;
-            this.capacity = capacity;
-        }
-
-        public void
-        raise(int key) {
-            if (capacity < 0) return;
-            Node node = nodes.get(key);
-            remove(node);
-            add(node);
-        }
-
-        public boolean
-        cached(int key) {
-            return nodes.containsKey(key);
-        }
-
-        public int
-        cache(int key) {
-            Node node = new Node(key);
-            nodes.put(key, node);
-            if (capacity < 0) return -1;
-            add(node);
-
-            if (nodes.size() > capacity) return pushout();
-            else return -1;
-        }
-
-        public void
-        clear() {
-            this.head.next = this.tail;
-            this.tail.prev = this.head;
-            nodes.clear();
-        }
-
-        public void
-        clear(int index) {
-            Node node = nodes.get(index);
-            remove(node);
-            nodes.remove(index);
-        }
-
-        private int pushout() {
-            Node toRemove = head.next;
-            remove(toRemove);
-            nodes.remove(toRemove.key);
-            return toRemove.key;
-        }
-
-        private void
-        add(Node node) {
-            Node prev = tail.prev;
-            prev.next = node;
-            node.next = tail;
-            node.prev = prev;
-            tail.prev = node;
-        }
-
-        private void
-        remove(Node node) {
-            node.prev.next = node.next;
-            node.next.prev = node.prev;
-            node.next = null;
-            node.prev = null;
-        }
-
-        private static class Node {
-            private final int key;
-            private Node next;
-            private Node prev;
-
-            public Node(int key) {
-                this.key = key;
-            }
-        }
-    }
-
-    private static class FixedBiDirectionalMap {
-
-        private final int capacity;
-        private final Map<Integer, Integer> keys;
-        private final Map<Integer, Integer> values;
-
-        public FixedBiDirectionalMap(int capacity) {
-            this.capacity = capacity;
-            this.keys = new HashMap<>(capacity * 2);
-            this.values = new HashMap<>(capacity * 2);
-        }
-
-        public void
-        put(int key, int value) {
-            if (containsValue(value)) {
-                Integer prior = values.get(value);
-                keys.remove(prior);
-            }
-            keys.put(key, value);
-            values.put(value, key);
-
-            assert keys.size() <= capacity;
-            assert values.size() <= capacity;
-        }
-
-        public boolean
-        containsKey(Integer key) {
-            return keys.containsKey(key);
-        }
-
-        public boolean
-        containsValue(Integer value) {
-            return values.containsKey(value);
-        }
-
-        public int
-        getKey(int key) {
-            return keys.get(key);
-        }
-
-        public int
-        getValue(int value) {
-            return values.get(value);
-        }
-
-        public void
-        clear() {
-            keys.clear();
-            values.clear();
-        }
-    }
-
-    private record Array(int chunk, Object[] data) {
-
-        public Array(int length, int chunk) {
-            this(chunk, new Object[length]);
-        }
-
-        public void
-        set(int index, Object value) {
-            this.data[index % chunk] = value;
-        }
-
-        public Object
-        get(int index) {
-            return this.data[index % chunk];
-        }
     }
 
 }

@@ -9,4 +9,8 @@ public interface Subscriber {
     default void
     onDeserialized(int index) {
     }
+
+    default void
+    onCollision(int current, int next) {
+    }
 }
