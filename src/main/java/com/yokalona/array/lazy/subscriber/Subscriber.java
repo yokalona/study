@@ -9,12 +9,4 @@ public interface Subscriber {
     default void
     onDeserialized(int index) {
     }
-
-    default void
-    onLoad(int index) {
-    }
-
-    default void
-    onUnload(int index) {
-    }
 }

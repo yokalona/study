@@ -7,10 +7,13 @@ import java.util.List;
 
 import static java.util.Collections.unmodifiableList;
 
-public record Configuration(File file, Chunked read, Chunked write, List<Subscriber> subscribers, InMemory memory) {
+// cannot write more than memory size
+
+public record Configuration(File file, Chunked read, Chunked write, Chunked memory, List<Subscriber> subscribers) {
 
     public Configuration {
-        memory.count = Math.max(memory.count, Math.max(read.size(), write.size()));
+        if (read.size() > memory.size()) throw new ReadChunkLimitExceededException();
+        if (write.size() > memory.size()) throw new WriteChunkLimitExceededException();
     }
 
     public static MemoryLeft
@@ -27,7 +30,7 @@ public record Configuration(File file, Chunked read, Chunked write, List<Subscri
     }
 
     public interface MemoryLeft {
-        ChunkLeft memory(InMemory memory);
+        ChunkLeft memory(Chunked memory);
     }
 
     public interface ChunkLeft {
@@ -40,15 +43,15 @@ public record Configuration(File file, Chunked read, Chunked write, List<Subscri
 
     public static final class ConfigurationBuilder implements MemoryLeft, ChunkLeft {
         private final File file;
+        private Chunked memory;
         private final List<Subscriber> subscribers = new ArrayList<>();
-        private InMemory memory = new InMemory(1);
 
         public ConfigurationBuilder(File file) {
             this.file = file;
         }
 
         public ConfigurationBuilder
-        memory(InMemory memory) {
+        memory(Chunked memory) {
             this.memory = memory;
             return this;
         }
@@ -61,12 +64,12 @@ public record Configuration(File file, Chunked read, Chunked write, List<Subscri
 
         public WriteLeft
         read(Chunked read) {
-            return write -> new Configuration(file, read, write, unmodifiableList(subscribers), memory);
+            return write -> new Configuration(file, read, write, memory, unmodifiableList(subscribers));
         }
 
         public ReadLeft
         write(Chunked write) {
-            return read -> new Configuration(file, read, write, unmodifiableList(subscribers), memory);
+            return read -> new Configuration(file, read, write, memory, unmodifiableList(subscribers));
         }
 
     }
