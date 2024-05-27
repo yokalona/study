@@ -7,10 +7,32 @@ public interface Subscriber {
     }
 
     default void
+    onChunkSerialized() {
+    }
+
+    default void
     onDeserialized(int index) {
     }
 
     default void
-    onCollision(int current, int next) {
+    onChunkDeserialized() {
     }
+
+    default void
+    onCacheMiss(int current) {
+    }
+
+    default void
+    onWriteCollision(int prior, int current) {
+    }
+
+    default void
+    onFileCreated() {
+    }
+
+    default void
+    onChunkResized(ChunkType type, int prior, int current) {
+    }
+
 }
+

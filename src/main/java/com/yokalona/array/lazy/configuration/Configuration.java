@@ -7,9 +7,7 @@ import java.util.List;
 
 import static java.util.Collections.unmodifiableList;
 
-// cannot write more than memory size
-
-public record Configuration(File file, Chunked read, Chunked write, Chunked memory, List<Subscriber> subscribers) {
+public record Configuration(File file, ChunkedRead read, ChunkedWrite write, Chunked memory, List<Subscriber> subscribers) {
 
     public Configuration {
         if (read.size() > memory.size()) throw new ReadChunkLimitExceededException();
@@ -22,11 +20,11 @@ public record Configuration(File file, Chunked read, Chunked write, Chunked memo
     }
 
     public interface WriteLeft {
-        Configuration write(Chunked write);
+        Configuration write(ChunkedWrite write);
     }
 
     public interface ReadLeft {
-        Configuration read(Chunked read);
+        Configuration read(ChunkedRead read);
     }
 
     public interface MemoryLeft {
@@ -36,9 +34,9 @@ public record Configuration(File file, Chunked read, Chunked write, Chunked memo
     public interface ChunkLeft {
         ChunkLeft addSubscriber(Subscriber subscriber);
 
-        ReadLeft write(Chunked write);
+        ReadLeft write(ChunkedWrite write);
 
-        WriteLeft read(Chunked read);
+        WriteLeft read(ChunkedRead read);
     }
 
     public static final class ConfigurationBuilder implements MemoryLeft, ChunkLeft {
@@ -63,39 +61,13 @@ public record Configuration(File file, Chunked read, Chunked write, Chunked memo
         }
 
         public WriteLeft
-        read(Chunked read) {
+        read(ChunkedRead read) {
             return write -> new Configuration(file, read, write, memory, unmodifiableList(subscribers));
         }
 
         public ReadLeft
-        write(Chunked write) {
+        write(ChunkedWrite write) {
             return read -> new Configuration(file, read, write, memory, unmodifiableList(subscribers));
-        }
-
-    }
-
-    public static final class InMemory {
-        private int count;
-
-        private InMemory(int count) {
-            this.count = count;
-        }
-
-        public static InMemory
-        memorise(int count) {
-            assert count > 0;
-
-            return new InMemory(count);
-        }
-
-        public static InMemory
-        none() {
-            return new InMemory(1);
-        }
-
-        public int
-        count() {
-            return count;
         }
 
     }

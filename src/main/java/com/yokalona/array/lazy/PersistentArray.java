@@ -1,9 +1,12 @@
 package com.yokalona.array.lazy;
 
 import com.yokalona.array.lazy.configuration.Configuration;
+import com.yokalona.array.lazy.configuration.ReadChunkLimitExceededException;
+import com.yokalona.array.lazy.configuration.WriteChunkLimitExceededException;
 import com.yokalona.array.lazy.serializers.Serializer;
 import com.yokalona.array.lazy.serializers.SerializerStorage;
 import com.yokalona.array.lazy.serializers.TypeDescriptor;
+import com.yokalona.array.lazy.subscriber.ChunkType;
 import com.yokalona.array.lazy.subscriber.Subscriber;
 
 import java.io.BufferedInputStream;
@@ -12,8 +15,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
+import java.util.function.Consumer;
 
 
 /**
@@ -100,15 +103,17 @@ public class PersistentArray<Type> implements AutoCloseable {
     public static final int HEADER_SIZE = HEADER.length + VERSION.length + (2 * SerializerStorage.INTEGER.descriptor().size());
 
     private final int length;
-    private final Object[] data;
-    private final int[] indices;
     private final ChunkQueue queue;
-
     private final CachedFile storage;
     private final byte[] reusableBuffer;
     private final DataLayout dataLayout;
     private final TypeDescriptor<Type> type;
+
     public final Configuration configuration;
+
+    private Object[] data;
+    private int[] indices;
+    private int readChunkSize;
 
     private PersistentArray(int length, TypeDescriptor<Type> type, Object[] data, LayoutProvider layoutProvider,
                             Configuration configuration) {
@@ -122,6 +127,7 @@ public class PersistentArray<Type> implements AutoCloseable {
         this.storage = new CachedFile(configuration.file());
         this.queue = new ChunkQueue(configuration.write().size());
         this.reusableBuffer = new byte[configuration.file().buffer()];
+        this.readChunkSize = configuration.read().size();
     }
 
     public PersistentArray(int length, TypeDescriptor<Type> type, LayoutProvider layoutProvider, Configuration configuration) {
@@ -130,34 +136,40 @@ public class PersistentArray<Type> implements AutoCloseable {
     }
 
     /**
-     * Returns item from the array. Loads from disk if necessary. Depending on configuration, may unload the least
-     * recently used item in an array that is loaded into memory.
-     *
-     * @param index of item to return
-     * @return always loaded item in the array. It is guaranteed that the returned item is at the time of return is
-     * fully loaded into memory. To override this behavior, one might use proxy classes.
+     * Returns item from the persistent array. This operation might cause a data load from external resource, like disk.
+     * Other records might be loaded as well depending on the current configuration. The Returned record is guarantied
+     * to be the most update version of the record at the moment of dispatching the method.
      */
     @SuppressWarnings("unchecked")
     public final Type
     get(int index) {
         assert index >= 0 && index < length;
 
-        if (!contains(index)) load(index);
+        if (configuration.read().forceReload()) load(index);
+        else if (!contains(index)) {
+            notify(subscriber -> subscriber.onCacheMiss(index));
+            load(index);
+        }
+
         return (Type) data[index % data.length];
     }
 
-    private boolean
-    contains(int index) {
-        return indices[index % indices.length] == index;
-    }
-
+    /**
+     * Sets the value in a persistent array. This operation might cause data to be flushed to the external resource, like
+     * disk. Other records might be flushed as well depending on configuration.
+     */
     public final void
     set(int index, Type value) {
         assert index >= 0 && index < length;
 
-        if (taken(index) && queue.contains(indices[index % indices.length])) {
-            flush();
-            for (Subscriber subscriber : configuration.subscribers()) subscriber.onCollision(indices[index % indices.length], index);
+        int prior = indices[index % indices.length];
+        if (prior >= 0 && queue.contains(prior)) {
+            if (configuration.write().forceFlush()) flush();
+            else {
+                serialise(prior);
+                queue.remove(prior);
+            }
+            notify(subscriber -> subscriber.onWriteCollision(prior, index));
         }
 
         associate(index, value);
@@ -166,9 +178,43 @@ public class PersistentArray<Type> implements AutoCloseable {
         } else serialise(index);
     }
 
-    private boolean
-    taken(int index) {
-        return indices[index % indices.length] >= 0;
+    public final void
+    fill(Type value) {
+        int prior = queue.capacity;
+        resizeWriteChunk(configuration.write().size());
+        for (int index = 0; index < length; index ++) set(index, value);
+        resizeWriteChunk(prior);
+    }
+
+    public final void
+    resizeReadChunk(int newSize) {
+        checkInvariant(newSize, queue.capacity, data.length);
+
+        int prior = this.readChunkSize;
+        this.readChunkSize = newSize;
+        notify(subscriber -> subscriber.onChunkResized(ChunkType.READ, prior, newSize));
+    }
+
+    public final void
+    resizeWriteChunk(int newSize) {
+        checkInvariant(readChunkSize, newSize, data.length);
+
+        flush();
+        int prior = queue.capacity;
+        queue.capacity = newSize;
+        notify(subscriber -> subscriber.onChunkResized(ChunkType.WRITE, prior, newSize));
+    }
+
+    public final void
+    resizeMemoryChunk(int newSize) {
+        checkInvariant(readChunkSize, queue.capacity, newSize);
+
+        flush();
+        int prior = this.data.length;
+        this.data = new Object[newSize];
+        this.indices = new int[newSize];
+        Arrays.fill(indices, -1);
+        notify(subscriber -> subscriber.onChunkResized(ChunkType.MEMORY, prior, newSize));
     }
 
     public int
@@ -185,6 +231,27 @@ public class PersistentArray<Type> implements AutoCloseable {
     }
 
     private void
+    checkInvariant(int read, int write, int memory) {
+        if (memory < read) throw new ReadChunkLimitExceededException();
+        if (memory < write) throw new WriteChunkLimitExceededException();
+    }
+
+    private boolean
+    contains(int index) {
+        return indices[index % indices.length] == index;
+    }
+
+    private boolean
+    reload(int index) {
+        return configuration.read().forceReload() || !contains(index);
+    }
+
+    private void
+    notify(Consumer<Subscriber> notification) {
+        configuration.subscribers().forEach(notification);
+    }
+
+    private void
     serialise() {
         try (storage; OutputWriter writer = new OutputWriter(storage.get(), reusableBuffer)) {
             writer.write(HEADER);
@@ -196,6 +263,7 @@ public class PersistentArray<Type> implements AutoCloseable {
             Serializer<Type> serializer = SerializerStorage.get(type);
             writer.write(integer.serialize(serializer.descriptor().size()));
             for (int index = 0; index < length; index++) writer.write(serializer.serialize(null));
+            notify(Subscriber::onFileCreated);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -203,10 +271,11 @@ public class PersistentArray<Type> implements AutoCloseable {
 
     private void
     load(int index) {
-        deserialize(index, configuration.read().chunked() ? configuration.read().size() : 1);
+        deserialize(index, readChunkSize);
     }
 
-    private void associate(int index, Type value) {
+    private void
+    associate(int index, Type value) {
         indices[index % indices.length] = index;
         data[index % data.length] = value;
     }
@@ -237,6 +306,7 @@ public class PersistentArray<Type> implements AutoCloseable {
                 }
                 serialize(writer, prior = current);
             }
+            notify(Subscriber::onChunkSerialized);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -247,7 +317,7 @@ public class PersistentArray<Type> implements AutoCloseable {
     serialize(OutputWriter writer, int index) throws IOException {
         if (!contains(index)) return;
         writer.write(SerializerStorage.get(type).serialize((Type) data[index % data.length]));
-        for (Subscriber subscriber : configuration.subscribers()) subscriber.onSerialized(index);
+        notify(subscriber -> subscriber.onSerialized(index));
     }
 
     private void
@@ -256,14 +326,25 @@ public class PersistentArray<Type> implements AutoCloseable {
 
         try (storage) {
             RandomAccessFile raf = storage.get();
+            InputReader reader = new InputReader(reusableBuffer, raf);
             dataLayout.seek(index, raf);
+            boolean shouldSeek = false;
             byte[] datum = new byte[SerializerStorage.get(type).descriptor().size()];
             for (int offset = index; offset < Math.min(index + size, length); offset++) {
-                int ignore = raf.read(datum);
-                assert ignore == datum.length;
+                if (!reload(offset)) {
+                    shouldSeek = true;
+                    if (configuration.read().breakOnLoaded()) break;
+                    else continue;
+                } else if (shouldSeek) {
+                    reader.invalidate();
+                    dataLayout.seek(offset, raf);
+                }
+                shouldSeek = false;
+                reader.read(datum);
                 associate(offset, SerializerStorage.get(type).deserialize(datum));
                 for (Subscriber subscriber : configuration.subscribers()) subscriber.onDeserialized(offset);
             }
+            notify(Subscriber::onChunkDeserialized);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -285,7 +366,7 @@ public class PersistentArray<Type> implements AutoCloseable {
     }
 
     public static <Type> void
-    copy(PersistentArray<Type> from, int position, PersistentArray<Type> to, int destination, int length) {
+    arraycopy(PersistentArray<Type> from, int position, PersistentArray<Type> to, int destination, int length) {
         for (int index = 0; index < length; index++)
             to.set(destination++, from.get(position++));
     }
@@ -299,71 +380,20 @@ public class PersistentArray<Type> implements AutoCloseable {
     deserialize(TypeDescriptor<Type> type, Configuration configuration, TreeSet<Integer> preload) {
         assert type != null && configuration != null && preload != null;
 
-        try (RandomAccessFile raf = new RandomAccessFile(configuration.file().path().toFile(), "r");
-             InputStream input = new BufferedInputStream(new FileInputStream(raf.getFD()))) {
+        try (InputStream input = new BufferedInputStream(new FileInputStream(configuration.file().path().toFile()))) {
             Serializer<Integer> integer = SerializerStorage.INTEGER;
             byte[] header = new byte[HEADER_SIZE];
             int ignore = input.read(header);
             assert ignore == header.length;
             int length = integer.deserialize(header, HEADER_SIZE - 2 * integer.descriptor().size());
-            PersistentArray<Type> array = new PersistentArray<>(length, type, new Object[configuration.memory().size()], LayoutProvider.which(validHeader(header), raf), configuration);
+            PersistentArray<Type> array = new PersistentArray<>(length, type, new Object[configuration.memory().size()],
+                    LayoutProvider.which(validHeader(header), input), configuration);
             int boundary = configuration.memory().size();
             Iterator<Integer> iterator = preload.iterator();
             for (int index = 0; index < Math.min(boundary, preload.size()); index++) array.get(iterator.next());
             return array;
         } catch (IOException e) {
             throw new RuntimeException(e);
-        }
-    }
-
-    public interface LayoutProvider {
-        DataLayout provide(TypeDescriptor<?> descriptor);
-
-        static LayoutProvider
-        which(byte format, RandomAccessFile raf) {
-            return switch (format & 0b0000011) {
-                case 0 -> ignore -> new VariableObjectLayout(raf);
-                case 1 -> FixedObjectLayout::new;
-                default -> throw new UnsupportedOperationException();
-            };
-        }
-    }
-
-    public interface DataLayout {
-        void seek(int index, RandomAccessFile raf) throws IOException;
-    }
-
-    public static final class VariableObjectLayout implements DataLayout {
-        private boolean cached;
-        private Path offset;
-
-        public VariableObjectLayout(RandomAccessFile ignore) {
-
-        }
-
-        @Override
-        public void seek(int index, RandomAccessFile raf) throws IOException {
-            raf.seek(findPosition(index) + HEADER_SIZE);
-        }
-
-        private long
-        findPosition(int index) {
-            return -1L;
-        }
-    }
-
-    /**
-     * Describes a fixed object data layout. Each object in such a layout has a fixed size it can occupy in the output
-     * file. This layout can be beneficial for fixed size data types, such as integers or composite data types
-     * consistent with fixed size data types. For large data sets, this data layout saves space on disk, however, for
-     * small arrays it will create unnecessary overhead.
-     *
-     * @param descriptor
-     */
-    public record FixedObjectLayout(TypeDescriptor<?> descriptor) implements DataLayout {
-        @Override
-        public void seek(int index, RandomAccessFile raf) throws IOException {
-            raf.seek((long) index * descriptor.size() + PersistentArray.HEADER_SIZE);
         }
     }
 
@@ -387,10 +417,10 @@ public class PersistentArray<Type> implements AutoCloseable {
         return String.format("%d.%d.%d", version[offset], version[offset + 1], version[offset + 2]);
     }
 
-    private static class ChunkQueue {
+    private static final class ChunkQueue {
         private final BitSet set;
-        private final int capacity;
 
+        private int capacity;
         private int count = 0;
         private int first = Integer.MAX_VALUE;
 
@@ -406,7 +436,7 @@ public class PersistentArray<Type> implements AutoCloseable {
                 set.set(index);
                 count++;
             }
-            return count == capacity;
+            return count >= capacity;
         }
 
         boolean
@@ -421,6 +451,19 @@ public class PersistentArray<Type> implements AutoCloseable {
             this.first = Integer.MAX_VALUE;
         }
 
+        public void
+        remove(int index) {
+            if (index == first) {
+                int next = set.nextSetBit(first + 1);
+                if (next < 0) first = Integer.MAX_VALUE;
+                else first = next;
+            }
+
+            this.set.set(index, false);
+            this.count --;
+
+            assert this.count >= 0;
+        }
     }
 
 }

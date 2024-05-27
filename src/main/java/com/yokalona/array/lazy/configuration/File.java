@@ -6,7 +6,13 @@ import static com.yokalona.array.lazy.configuration.File.Mode.RW;
 
 public record File(Path path, Mode mode, int buffer, boolean cached) {
     public enum Mode {
-        R, RW, RWS, RWD;
+        R("read only"), RW("read/write"), RWS("sync read/write"), RWD("dsync read/write");
+
+        public final String explanation;
+
+        Mode(String explanation) {
+            this.explanation = explanation;
+        }
 
         public String
         mode() {

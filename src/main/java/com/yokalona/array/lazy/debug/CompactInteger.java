@@ -1,4 +1,4 @@
-package com.yokalona.array.lazy;
+package com.yokalona.array.lazy.debug;
 
 import com.yokalona.array.lazy.serializers.Serializer;
 import com.yokalona.array.lazy.serializers.SerializerStorage;
