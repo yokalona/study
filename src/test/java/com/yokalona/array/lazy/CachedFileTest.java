@@ -1,5 +1,6 @@
 package com.yokalona.array.lazy;
 
+import com.yokalona.array.persitent.io.CachedFile;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -7,7 +8,7 @@ import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static com.yokalona.array.lazy.configuration.File.file;
+import static com.yokalona.array.persitent.configuration.File.file;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CachedFileTest {

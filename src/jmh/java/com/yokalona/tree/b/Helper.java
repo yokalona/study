@@ -35,6 +35,21 @@ public class Helper {
         arr[right] = tmp;
     }
 
+    public static void
+    shuffle(int[] array) {
+        for (int idx = array.length - 1; idx > 0; idx--) {
+            int element = (int) Math.floor(Math.random() * (idx + 1));
+            swap(array, idx, element);
+        }
+    }
+
+    private static void
+    swap(int[] arr, int left, int right) {
+        int tmp = arr[left];
+        arr[left] = arr[right];
+        arr[right] = tmp;
+    }
+
     public record SpyKey(Integer key) implements Comparable<SpyKey> {
         private static long count = 0L;
 
