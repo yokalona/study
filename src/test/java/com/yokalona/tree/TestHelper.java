@@ -110,8 +110,8 @@ public class TestHelper {
                         |     Deserializations                    | %10d times   |%n""",
                 name, time,
                 statist.get(CountingSubscriber.Counter.CACHE_MISS),
-                statist.get(CountingSubscriber.Counter.CHUNK_SERIALIZED),
-                statist.get(CountingSubscriber.Counter.CHUNK_DESERIALIZED),
+                statist.get(CountingSubscriber.Counter.CHUNK_SERIALIZATIONS),
+                statist.get(CountingSubscriber.Counter.CHUNK_DESERIALIZATIONS),
                 statist.get(CountingSubscriber.Counter.WRITE_COLLISIONS),
                 statist.get(CountingSubscriber.Counter.SERIALIZATIONS),
                 statist.get(CountingSubscriber.Counter.DESERIALIZATIONS));

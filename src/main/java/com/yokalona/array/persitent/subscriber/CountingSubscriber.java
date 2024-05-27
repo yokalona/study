@@ -9,35 +9,35 @@ public class CountingSubscriber implements Subscriber {
     @Override
     public void
     onSerialized(int index) {
-        counters[Counter.SERIALIZATIONS.ordinal()] ++;
+        inc(Counter.SERIALIZATIONS);
     }
 
     @Override
     public void
     onDeserialized(int index) {
-        counters[Counter.DESERIALIZATIONS.ordinal()] ++;
+        inc(Counter.DESERIALIZATIONS);
     }
 
     @Override
     public void
     onCacheMiss(int current) {
-        counters[Counter.CACHE_MISS.ordinal()] ++;
+        inc(Counter.CACHE_MISS);
     }
 
     @Override
     public void
     onWriteCollision(int current, int next) {
-        counters[Counter.WRITE_COLLISIONS.ordinal()] ++;
+        inc(Counter.WRITE_COLLISIONS);
     }
 
     @Override
     public void onChunkSerialized() {
-        counters[Counter.CHUNK_SERIALIZED.ordinal()] ++;
+        inc(Counter.CHUNK_SERIALIZATIONS);
     }
 
     @Override
     public void onChunkDeserialized() {
-        counters[Counter.CHUNK_DESERIALIZED.ordinal()] ++;
+        inc(Counter.CHUNK_DESERIALIZATIONS);
     }
 
     @Override
@@ -47,10 +47,7 @@ public class CountingSubscriber implements Subscriber {
 
     public void
     reset() {
-        long fileCreationTime = counters[Counter.FILE_CREATED.ordinal()];
-        for (int counter = 0; counter < Counter.values().length; counter ++) counters[counter + Counter.values().length] += counters[counter];
         Arrays.fill(counters, 0, Counter.values().length, 0);
-        counters[Counter.FILE_CREATED.ordinal()] = fileCreationTime;
     }
 
     public long
@@ -63,8 +60,29 @@ public class CountingSubscriber implements Subscriber {
         return ((float) counters[Counter.valueOf(counter.name()).ordinal() + Counter.values().length]) / on;
     }
 
+    private void
+    inc(Counter counter) {
+        counters[counter.ordinal()]++;
+        counters[counter.ordinal() + Counter.values().length] ++;
+    }
+
+    public String
+    toString() {
+        StringBuilder report = new StringBuilder("Iterations:\n");
+        for (Counter counter : Counter.values()) {
+            if (counter == Counter.FILE_CREATED) continue;
+            report.append(String.format("\t%s: %d%n", counter.name(), counters[counter.ordinal()]));
+        }
+        report.append("Total:\n");
+        for (Counter counter : Counter.values()) {
+            if (counter == Counter.FILE_CREATED) continue;
+            report.append(String.format("\t%s: %d%n", counter.name(), counters[counter.ordinal() + Counter.values().length]));
+        }
+        return report.toString();
+    }
+
     public enum Counter {
-        SERIALIZATIONS, CHUNK_SERIALIZED, DESERIALIZATIONS, CHUNK_DESERIALIZED, CACHE_MISS, WRITE_COLLISIONS, FILE_CREATED
+        SERIALIZATIONS, CHUNK_SERIALIZATIONS, DESERIALIZATIONS, CHUNK_DESERIALIZATIONS, CACHE_MISS, WRITE_COLLISIONS, FILE_CREATED;
     }
 
 }

@@ -25,6 +25,15 @@ public final class Version implements Comparable<Version> {
         this.mode = mode;
     }
 
+    public Version(int critical, int major, int minor, int mode) {
+        this((byte) critical, (byte) major, (byte) minor, (byte) mode);
+    }
+
+    public Version
+    copy() {
+        return new Version(critical, major, minor, mode);
+    }
+
     @Override
     public int
     compareTo(Version other) {

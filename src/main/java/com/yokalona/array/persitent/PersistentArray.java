@@ -10,11 +10,7 @@ import com.yokalona.array.persitent.subscriber.ChunkType;
 import com.yokalona.array.persitent.subscriber.Subscriber;
 import com.yokalona.array.persitent.util.Version;
 
-import java.io.BufferedInputStream;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.function.Consumer;
@@ -34,7 +30,7 @@ public class PersistentArray<Type> implements AutoCloseable {
 
     private static final boolean DELETED = true;
     private static final byte[] HEADER = new byte[]{-0x22, -0x36, -0x26, -0x06, -0x36, -0x26};
-    public static final Version VERSION = new Version((byte) 1, (byte) 1, (byte) 0, (byte) 0);
+    public static final Version VERSION = new Version(1, 1, 0, 0);
     public static final int HEADER_SIZE = HEADER.length + Version.descriptor.size()
             + (2 * SerializerStorage.INTEGER.descriptor().size())
             + SerializerStorage.BOOLEAN.descriptor().size();
@@ -84,7 +80,7 @@ public class PersistentArray<Type> implements AutoCloseable {
      *     </ul>
      * </pre>
      */
-    private final Version version = new Version((byte) 1, (byte) 1, (byte) 0, (byte) 0);
+    private final Version version = VERSION.copy();
 
     private final int length;
     private final ChunkQueue queue;
@@ -137,8 +133,7 @@ public class PersistentArray<Type> implements AutoCloseable {
     get(int index) {
         assert index >= 0 && index < length : index + " " + length;
 
-        if (configuration.read().forceReload()) load(index);
-        else if (!contains(index)) {
+        if (configuration.read().forceReload() || !contains(index)) {
             notify(subscriber -> subscriber.onCacheMiss(index));
             load(index);
         }
@@ -222,9 +217,10 @@ public class PersistentArray<Type> implements AutoCloseable {
     public void
     clear() throws IOException {
         close();
-        Files.deleteIfExists(configuration.file().path());
         Arrays.fill(data, null);
         queue.clear();
+        setForRemoval();
+        storage.closeFile();
     }
 
     public void
@@ -239,6 +235,14 @@ public class PersistentArray<Type> implements AutoCloseable {
             notify(Subscriber::onFileCreated);
         } catch (Exception e) {
             throw new SerializationException("during full array serialization", e);
+        }
+    }
+
+    private void
+    setForRemoval() throws IOException {
+        try (var raf = new RandomAccessFile(configuration.file().path().toFile(), "rw")) {
+            raf.seek(HEADER.length + Version.descriptor.size());
+            raf.write(Serializers.serialize(true));
         }
     }
 
@@ -337,7 +341,7 @@ public class PersistentArray<Type> implements AutoCloseable {
                 associate(offset, Serializers.deserialize(type, datum));
                 for (Subscriber subscriber : configuration.subscribers()) subscriber.onDeserialized(offset);
             }
-            notify(Subscriber::onChunkDeserialized);
+            if (size > 1) notify(Subscriber::onChunkDeserialized);
         } catch (IOException e) {
             throw new DeserializationException("during " + index + " deserialization", e);
         }
@@ -356,12 +360,6 @@ public class PersistentArray<Type> implements AutoCloseable {
             serialiseChunk();
             queue.clear();
         }
-    }
-
-    public static <Type> void
-    arraycopy(PersistentArray<Type> from, int position, PersistentArray<Type> to, int destination, int length) {
-        for (int index = 0; index < length; index++)
-            to.set(destination++, from.get(position++));
     }
 
     public static <Type> PersistentArray<Type>

@@ -10,8 +10,6 @@ import com.yokalona.array.persitent.io.FixedObjectLayout;
 import com.yokalona.array.persitent.serializers.Serializers;
 import com.yokalona.array.persitent.subscriber.CountingSubscriber;
 import com.yokalona.array.persitent.subscriber.CountingSubscriber.Counter;
-import com.yokalona.array.persitent.util.Power;
-import com.yokalona.tree.TestHelper.PersistenceTest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,15 +19,12 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
 
 import static com.yokalona.array.persitent.configuration.Chunked.chunked;
 import static com.yokalona.array.persitent.configuration.ChunkedRead.read;
 import static com.yokalona.array.persitent.configuration.ChunkedWrite.write;
-import static com.yokalona.array.persitent.configuration.File.Mode.*;
 import static com.yokalona.array.persitent.configuration.File.file;
 import static com.yokalona.array.persitent.configuration.Configuration.configure;
-import static com.yokalona.tree.TestHelper.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class PersistentArrayTest {
@@ -52,7 +47,7 @@ public class PersistentArrayTest {
     public void
     testCreateArrayCreatesFileOnDisk() throws IOException {
         Path filePath = path.resolve("testCreateArrayCreatesFileOnDisk.la");
-        try(var ignore = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new,
+        try (var ignore = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new,
                 configure(file(filePath).cached())
                         .memory(chunked(10))
                         .read(read().chunked(10))
@@ -70,7 +65,7 @@ public class PersistentArrayTest {
                 .memory(chunked(10))
                 .read(read().chunked(10))
                 .write(write().chunked(10));
-        try(var ignore = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
+        try (var ignore = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
             assertTrue(Files.exists(filePath));
         }
         try (var file = new RandomAccessFile(filePath.toFile(), "rw")) {
@@ -88,7 +83,7 @@ public class PersistentArrayTest {
                 .memory(chunked(10))
                 .read(read().chunked(10))
                 .write(write().chunked(10));
-        try(var ignore = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
+        try (var ignore = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
             assertTrue(Files.exists(filePath));
         }
         try (var file = new RandomAccessFile(filePath.toFile(), "rw")) {
@@ -106,7 +101,7 @@ public class PersistentArrayTest {
                 .memory(chunked(10))
                 .read(read().chunked(10))
                 .write(write().chunked(10));
-        try(var ignore = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
+        try (var ignore = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
             assertTrue(Files.exists(filePath));
         }
         try (var file = new RandomAccessFile(filePath.toFile(), "rw")) {
@@ -124,9 +119,9 @@ public class PersistentArrayTest {
                 .memory(chunked(10))
                 .read(read().chunked(10))
                 .write(write().chunked(10));
-        try(var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
+        try (var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
             assertTrue(Files.exists(filePath));
-            for (int i = 0; i < array.length(); i ++) {
+            for (int i = 0; i < array.length(); i++) {
                 array.set(i, new CompactInteger(i + 10));
             }
         }
@@ -140,150 +135,282 @@ public class PersistentArrayTest {
 
     @Test
     public void
+    testBaseEventsAreSent() throws IOException {
+        Path filePath = path.resolve("testBaseEventsAreSent.la");
+        CountingSubscriber subscriber = new CountingSubscriber();
+        Configuration configuration = configure(file(filePath).cached())
+                .memory(chunked(10))
+                .addSubscriber(subscriber)
+                .read(read().chunked(10))
+                .write(write().chunked(10));
+        try (var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
+            assertTrue(Files.exists(filePath));
+            for (int i = 0; i < array.length(); i++) {
+                array.set(i, new CompactInteger(i + 10));
+            }
+        }
+        assertEquals(1, subscriber.get(Counter.CHUNK_SERIALIZATIONS));
+        assertEquals(10, subscriber.get(Counter.SERIALIZATIONS));
+        try (var array = PersistentArray.deserialize(CompactInteger.descriptor, configuration)) {
+            for (int i = 0; i < array.length(); i++) {
+                assertEquals(i + 10, array.get(i).value());
+            }
+        }
+        assertEquals(1, subscriber.get(Counter.CHUNK_DESERIALIZATIONS));
+        assertEquals(10, subscriber.get(Counter.DESERIALIZATIONS));
+    }
+
+    @Test
+    public void
+    testChunkSizeAffectIO() throws IOException {
+        Path filePath = path.resolve("testChunkSizeAffectIO.la");
+        CountingSubscriber subscriber = new CountingSubscriber();
+        Configuration configuration = configure(file(filePath).cached())
+                .memory(chunked(10))
+                .addSubscriber(subscriber)
+                .read(read().chunked(10))
+                .write(write().chunked(10));
+        try (var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
+            assertTrue(Files.exists(filePath));
+            for (int i = 0; i < array.length(); i++) {
+                array.set(i, new CompactInteger(i + 10));
+            }
+            assertEquals(1, subscriber.get(Counter.CHUNK_SERIALIZATIONS));
+            assertEquals(10, subscriber.get(Counter.SERIALIZATIONS));
+            array.resizeWriteChunk(3);
+            subscriber.reset();
+            for (int i = 0; i < array.length(); i++) {
+                array.set(i, new CompactInteger(i + 10));
+            }
+            assertEquals(3, subscriber.get(Counter.CHUNK_SERIALIZATIONS));
+            assertEquals(9, subscriber.get(Counter.SERIALIZATIONS));
+            array.flush();
+            assertEquals(4, subscriber.get(Counter.CHUNK_SERIALIZATIONS));
+            assertEquals(10, subscriber.get(Counter.SERIALIZATIONS));
+        }
+
+        try (var array = PersistentArray.deserialize(CompactInteger.descriptor, configuration)) {
+            for (int i = 0; i < array.length(); i++) {
+                assertEquals(i + 10, array.get(i).value());
+            }
+            assertEquals(1, subscriber.get(Counter.CHUNK_DESERIALIZATIONS));
+            assertEquals(10, subscriber.get(Counter.DESERIALIZATIONS));
+            array.resizeMemoryChunk(10);
+            array.resizeReadChunk(3);
+            subscriber.reset();
+            for (int i = 0; i < array.length(); i++) {
+                assertEquals(i + 10, array.get(i).value());
+            }
+            assertEquals(4, subscriber.get(Counter.CHUNK_DESERIALIZATIONS));
+            assertEquals(10, subscriber.get(Counter.DESERIALIZATIONS));
+        }
+    }
+
+    @Test
+    public void
+    testGetSame() throws IOException {
+        Path filePath = path.resolve("testGetSame.la");
+        CountingSubscriber subscriber = new CountingSubscriber();
+        Configuration configuration = configure(file(filePath).cached())
+                .memory(chunked(10))
+                .addSubscriber(subscriber)
+                .read(read().chunked(3))
+                .write(write().chunked(3));
+        try (var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
+            assertTrue(Files.exists(filePath));
+            for (int i = 0; i < array.length(); i++) {
+                array.get(5);
+            }
+            array.get(6);
+            array.get(7);
+            assertEquals(1, subscriber.get(Counter.CHUNK_DESERIALIZATIONS));
+            assertEquals(3, subscriber.get(Counter.DESERIALIZATIONS));
+            assertEquals(1, subscriber.get(Counter.CACHE_MISS));
+            array.get(8);
+            assertEquals(2, subscriber.get(Counter.CHUNK_DESERIALIZATIONS));
+            assertEquals(5, subscriber.get(Counter.DESERIALIZATIONS));
+            assertEquals(2, subscriber.get(Counter.CACHE_MISS));
+        }
+        subscriber.reset();
+        try (var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new,
+                configure(configuration.file())
+                        .memory(configuration.memory())
+                        .addSubscriber(subscriber)
+                        .read(read().forceReload().chunked(3))
+                        .write(configuration.write()))) {
+            assertTrue(Files.exists(filePath));
+            for (int i = 0; i < array.length(); i++) {
+                array.get(5);
+            }
+            array.get(6);
+            array.get(7);
+            assertEquals(12, subscriber.get(Counter.CHUNK_DESERIALIZATIONS));
+            assertEquals(36, subscriber.get(Counter.DESERIALIZATIONS));
+            assertEquals(12, subscriber.get(Counter.CACHE_MISS));
+            array.get(8);
+            assertEquals(13, subscriber.get(Counter.CHUNK_DESERIALIZATIONS));
+            assertEquals(38, subscriber.get(Counter.DESERIALIZATIONS));
+            assertEquals(13, subscriber.get(Counter.CACHE_MISS));
+        }
+    }
+
+    @Test
+    public void
+    testGetSameBreakOnLoad() throws IOException {
+        Path filePath = path.resolve("testGetSameBreakOnLoad.la");
+        CountingSubscriber subscriber = new CountingSubscriber();
+        Configuration configuration = configure(file(filePath).cached())
+                .memory(chunked(5))
+                .addSubscriber(subscriber)
+                .read(read().breakOnLoaded().chunked(3))
+                .write(write().chunked(3));
+        try (var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
+            assertTrue(Files.exists(filePath));
+            array.get(0);
+            array.get(4);
+            subscriber.reset();
+            array.get(1);
+            assertEquals(1, subscriber.get(Counter.DESERIALIZATIONS));
+        }
+        try (var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new,
+                configure(configuration.file())
+                        .memory(configuration.memory())
+                        .addSubscriber(subscriber)
+                        .read(read().chunked(3))
+                        .write(write().chunked(3)))) {
+            assertTrue(Files.exists(filePath));
+            array.get(0);
+            array.get(4);
+            subscriber.reset();
+            array.get(1);
+            assertEquals(2, subscriber.get(Counter.DESERIALIZATIONS));
+        }
+    }
+
+    @Test
+    public void
+    testSet() throws IOException {
+        Path filePath = path.resolve("testSet.la");
+        CountingSubscriber subscriber = new CountingSubscriber();
+        Configuration configuration = configure(file(filePath).cached())
+                .memory(chunked(5))
+                .addSubscriber(subscriber)
+                .read(read().breakOnLoaded().chunked(3))
+                .write(write().chunked(3));
+        try (var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
+            array.set(0, new CompactInteger(0));
+            array.set(5, new CompactInteger(5));
+            assertEquals(1, subscriber.get(Counter.SERIALIZATIONS));
+            assertEquals(1, subscriber.get(Counter.WRITE_COLLISIONS));
+            assertEquals(0, subscriber.get(Counter.CHUNK_SERIALIZATIONS));
+            array.set(0, new CompactInteger(10));
+            assertEquals(2, subscriber.get(Counter.WRITE_COLLISIONS));
+            assertEquals(2, subscriber.get(Counter.SERIALIZATIONS));
+        }
+        subscriber.reset();
+        try (var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new,
+                configure(configuration.file())
+                        .memory(configuration.memory())
+                        .addSubscriber(subscriber)
+                        .read(read().chunked(3))
+                        .write(write().forceFlush().chunked(3)))) {
+            assertTrue(Files.exists(filePath));
+            array.set(0, new CompactInteger(0));
+            array.set(5, new CompactInteger(5));
+            assertEquals(1, subscriber.get(Counter.SERIALIZATIONS));
+            assertEquals(1, subscriber.get(Counter.WRITE_COLLISIONS));
+            assertEquals(1, subscriber.get(Counter.CHUNK_SERIALIZATIONS));
+            array.set(0, new CompactInteger(10));
+            assertEquals(2, subscriber.get(Counter.WRITE_COLLISIONS));
+            assertEquals(2, subscriber.get(Counter.CHUNK_SERIALIZATIONS));
+            assertEquals(2, subscriber.get(Counter.SERIALIZATIONS));
+        }
+    }
+
+    @Test
+    public void
+    testLinearGetSet() throws IOException {
+        Path filePath = path.resolve("testLinearGetSet.la");
+        CountingSubscriber subscriber = new CountingSubscriber();
+        Configuration configuration = configure(file(filePath).cached())
+                .memory(chunked(10))
+                .addSubscriber(subscriber)
+                .read(read().linear())
+                .write(write().linear());
+        try (var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
+            assertTrue(Files.exists(filePath));
+            for (int i = 0; i < array.length(); i++) {
+                array.set(i, new CompactInteger(i + 10));
+            }
+            assertEquals(10, subscriber.get(Counter.SERIALIZATIONS));
+            assertEquals(0, subscriber.get(Counter.WRITE_COLLISIONS));
+            assertEquals(0, subscriber.get(Counter.CHUNK_SERIALIZATIONS));
+        }
+        try (var array = PersistentArray.deserialize(CompactInteger.descriptor, configuration)) {
+            assertTrue(Files.exists(filePath));
+            for (int i = 0; i < array.length(); i++) {
+                assertEquals(i + 10, array.get(i).value());
+            }
+            assertEquals(10, subscriber.get(Counter.DESERIALIZATIONS));
+            assertEquals(10, subscriber.get(Counter.CACHE_MISS));
+            assertEquals(0, subscriber.get(Counter.CHUNK_DESERIALIZATIONS));
+        }
+    }
+
+    @Test
+    public void
     testDataIsWrittenAndCanBeReadLater() throws IOException {
         Path filePath = path.resolve("testDataIsWrittenAndCanBeReadLater.la");
         Configuration configuration = configure(file(filePath).cached())
                 .memory(chunked(10))
                 .read(read().chunked(10))
                 .write(write().chunked(10));
-        try(var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
+        try (var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
             assertTrue(Files.exists(filePath));
-            for (int i = 0; i < array.length(); i ++) {
+            for (int i = 0; i < array.length(); i++) {
                 array.set(i, new CompactInteger(i + 10));
             }
         }
         try (var array = PersistentArray.deserialize(CompactInteger.descriptor, configuration)) {
-            for (int i = 0; i < array.length(); i ++) {
+            for (int i = 0; i < array.length(); i++) {
                 assertEquals(i + 10, array.get(i).value());
             }
         }
     }
 
-//    @ParameterizedTest
-//    @ValueSource(floats = {.05F})
+    @Test
     public void
-    testMemoryConsumption(float factor) throws IOException, InterruptedException {
-        CountingSubscriber statist = new CountingSubscriber();
-        int length = Power.two(10);
-        Configuration configuration = configure(
-                file(path.resolve(UUID.randomUUID() + ".la"))
-                        .mode(RW)
-                        .buffer(5 * Power.two(20))
-                        .cached())
-                .memory(chunked(Power.two(17)))
-                .addSubscriber(statist)
-                .read(read().breakOnLoaded().chunked(Power.two(17)))
-                .write(write().chunked(Power.two(17)));
-        long writeLinear = 0L, readLinear = 0L, writeRandom = 0L, readRandom = 0L;
-        printConfiguration(new PersistenceTest(length, configuration.memory().size(),
-                configuration.read().size(),
-                configuration.write().size(),
-                configuration.file().buffer(),
-                CompactInteger.descriptor.size()));
-        for (int i = 0; i < 1; i++) {
-            printHeader(i + 1, 1);
-            writeLinear += printStatistic("Linear write", writeLinear(length, configuration, statist), statist);
-            readLinear += printStatistic("Linear read", readLinear(length, configuration, false), statist);
-//            writeRandom += printStatistic("Random write", writeRandom(length, configuration), statist);
-//            readRandom += printStatistic("Random read", readRandom(length, configuration, true), statist);
+    testFill() throws IOException {
+        Path filePath = path.resolve("testFill.la");
+        Configuration configuration = configure(file(filePath).cached())
+                .memory(chunked(10))
+                .read(read().chunked(10))
+                .write(write().chunked(10));
+        try (var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
+            array.fill(new CompactInteger(10));
         }
-        printHeader();
-        printAverage("linear write", (float) writeLinear / 1, "ms");
-        printAverage("linear read", (float) readLinear / 1, "ms");
-        printAverage("random write", (float) writeRandom / 1, "ms");
-        printAverage("random read", (float) readRandom / 1, "ms");
-        printAverage("read collisions", statist.average(Counter.CACHE_MISS, 1), "ops");
-        printAverage("write collisions", statist.average(Counter.WRITE_COLLISIONS, 1), "ops");
-        printStatistic("File size", getSize(Files.size(configuration.file().path())));
-        printHeader();
-    }
-
-    private static long
-    readLinear(int length, Configuration configuration, boolean validate) {
         try (var array = PersistentArray.deserialize(CompactInteger.descriptor, configuration)) {
-            long start = System.currentTimeMillis();
-            for (int index = 0; index < length; index++) {
-                CompactInteger value = array.get(index);
-                if (validate) {
-                    assertNotNull(value);
-                    assertEquals(index, value.value());
-                }
-                printProgress(length, index);
+            for (int i = 0; i < array.length(); i++) {
+                assertEquals(10, array.get(i).value());
             }
-            System.err.print("\r");
-            System.err.flush();
-            return System.currentTimeMillis() - start;
         }
     }
 
-    private static long
-    readRandom(int length, Configuration configuration, boolean validate) {
-        int[] indices = new int[length];
-        for (int index = 0; index < length; index++) {
-            indices[index] = index;
+    @Test
+    public void
+    testClear() throws IOException {
+        Path filePath = path.resolve("testFill.la");
+        Configuration configuration = configure(file(filePath).cached())
+                .memory(chunked(10))
+                .read(read().chunked(10))
+                .write(write().chunked(10));
+        try (var array = new PersistentArray<>(10, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
+            array.fill(new CompactInteger(10));
+            for (int index = 0; index < array.length(); index ++) assertNotNull(array.get(index));
+            array.clear();
+            for (int index = 0; index < array.length(); index ++) assertNull(array.get(index));
         }
-        shuffle(indices);
-        try (var array = PersistentArray.deserialize(CompactInteger.descriptor, configuration)) {
-            long start = System.currentTimeMillis();
-            int ops = 0;
-            for (int index : indices) {
-                CompactInteger value = array.get(index);
-                if (validate) {
-                    assertNotNull(value);
-                    assertEquals(index, value.value());
-                }
-                printProgress(length, ++ops);
-            }
-            System.err.print("\r");
-            System.err.flush();
-            return System.currentTimeMillis() - start;
-        }
-    }
-
-    private static long
-    writeLinear(int length, Configuration configuration, CountingSubscriber statist) {
-        long fileStart = System.currentTimeMillis();
-        try (var array = new PersistentArray<>(length, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
-            printStatistic("Creation time", (statist.get(Counter.FILE_CREATED) - fileStart) + " ms");
-            long start = System.currentTimeMillis();
-            for (int index = 0; index < length; index++) {
-                array.set(index, new CompactInteger(index));
-                printProgress(length, index);
-            }
-            System.out.print("\r");
-            System.out.flush();
-            return System.currentTimeMillis() - start;
-        }
-    }
-
-    private static long
-    writeRandom(int length, Configuration configuration, CountingSubscriber statist) {
-        int[] indices = new int[length];
-        for (int index = 0; index < length; index++) {
-            indices[index] = index;
-        }
-        shuffle(indices);
-        long fileStart = System.currentTimeMillis();
-        try (var array = new PersistentArray<>(length, CompactInteger.descriptor, FixedObjectLayout::new, configuration)) {
-            printStatistic("Creation time", (statist.get(Counter.FILE_CREATED) - fileStart) + " ms");
-            long start = System.currentTimeMillis();
-            int ops = 0;
-            for (int index : indices) {
-                array.set(index, new CompactInteger(index));
-                printProgress(length, ++ops);
-            }
-            System.err.print("\r");
-            System.err.flush();
-            return System.currentTimeMillis() - start;
-        }
-    }
-
-    private static void printProgress(int length, int index) {
-        int del = Math.max(1, length / 100);
-        if (index % del == 0) {
-            System.out.printf("\r|-record %10d out of %-10d-----+--------------------|", index, length);
-            System.out.flush();
-        }
+        assertThrows(FileMarkedForDeletingException.class, () -> PersistentArray.deserialize(CompactInteger.descriptor, configuration));
     }
 
 }

@@ -1,12 +1,6 @@
 package com.yokalona.tree.b;
 
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import org.junit.jupiter.api.Test;
-
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -16,7 +10,6 @@ class DataBlockTest {
 
     @Test
     public void testInsert() {
-        Loader<Integer, Integer> loader = new Loader<>(fileName, 10);
         DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, true);
         assertEquals(0, dataBlock.size());
         assertEquals(10, dataBlock.length());
@@ -33,7 +26,6 @@ class DataBlockTest {
 
     @Test
     public void testFind() {
-        Loader<Integer, Integer> loader = new Loader<>(fileName, 10);
         DataBlock<Integer, Integer> dataBlock = new DataBlock<>(10, true);
         for (int sample = 0; sample < 10; sample++) dataBlock.insert(sample, sample, sample);
         assertEquals(10, dataBlock.size());
