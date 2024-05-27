@@ -1,5 +1,7 @@
 package com.yokalona.array.persitent.subscriber;
 
+import com.yokalona.array.persitent.PersistentArray;
+
 public interface Subscriber {
 
     default void
@@ -32,6 +34,10 @@ public interface Subscriber {
 
     default void
     onChunkResized(ChunkType type, int prior, int current) {
+    }
+
+    default void
+    init(PersistentArray<?> array) {
     }
 
 }

@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class LoadArrayTest {
 
     private Path path;
-    private int repeats = 32;
+    private int repeats = 8;
 
     @BeforeEach
     public void

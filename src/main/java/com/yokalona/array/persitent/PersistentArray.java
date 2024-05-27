@@ -1,8 +1,19 @@
 package com.yokalona.array.persitent;
 
+import com.yokalona.PerformanceImpact;
 import com.yokalona.array.persitent.configuration.Configuration;
-import com.yokalona.array.persitent.exceptions.*;
-import com.yokalona.array.persitent.io.*;
+import com.yokalona.array.persitent.exceptions.DeserializationException;
+import com.yokalona.array.persitent.exceptions.FileMarkedForDeletingException;
+import com.yokalona.array.persitent.exceptions.HeaderMismatchException;
+import com.yokalona.array.persitent.exceptions.IncompatibleVersionException;
+import com.yokalona.array.persitent.exceptions.ReadChunkLimitExceededException;
+import com.yokalona.array.persitent.exceptions.SerializationException;
+import com.yokalona.array.persitent.exceptions.WriteChunkLimitExceededException;
+import com.yokalona.array.persitent.io.CachedFile;
+import com.yokalona.array.persitent.io.DataLayout;
+import com.yokalona.array.persitent.io.InputReader;
+import com.yokalona.array.persitent.io.LayoutProvider;
+import com.yokalona.array.persitent.io.OutputWriter;
 import com.yokalona.array.persitent.serializers.SerializerStorage;
 import com.yokalona.array.persitent.serializers.Serializers;
 import com.yokalona.array.persitent.serializers.TypeDescriptor;
@@ -10,9 +21,15 @@ import com.yokalona.array.persitent.subscriber.ChunkType;
 import com.yokalona.array.persitent.subscriber.Subscriber;
 import com.yokalona.array.persitent.util.Version;
 
-import java.io.*;
-import java.nio.file.Files;
-import java.util.*;
+import java.io.BufferedInputStream;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.RandomAccessFile;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Iterator;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 
 
@@ -108,6 +125,7 @@ public class PersistentArray<Type> implements AutoCloseable {
         this.queue = new ChunkQueue(configuration.write().size());
         this.reusableBuffer = new byte[configuration.file().buffer()];
         this.readChunkSize = configuration.read().size();
+        configuration.subscribers().forEach(subscriber -> subscriber.init(this));
     }
 
     /**
@@ -133,7 +151,7 @@ public class PersistentArray<Type> implements AutoCloseable {
     get(int index) {
         assert index >= 0 && index < length : index + " " + length;
 
-        if (configuration.read().forceReload() || !contains(index)) {
+        if (configuration.read().forceReload() || isFree(index)) {
             notify(subscriber -> subscriber.onCacheMiss(index));
             load(index);
         }
@@ -165,12 +183,20 @@ public class PersistentArray<Type> implements AutoCloseable {
         } else serialise(index);
     }
 
+    @PerformanceImpact
     public final void
     fill(Type value) {
         int prior = queue.capacity;
         resizeWriteChunk(configuration.write().size());
         for (int index = 0; index < length; index++) set(index, value);
         resizeWriteChunk(prior);
+    }
+
+    @PerformanceImpact
+    public final void
+    insert(int index, Type value) {
+        for (int offset = length - 1; offset > index; offset --) set(offset, get(offset - 1));
+        set(index, value);
     }
 
     public final void
@@ -223,6 +249,7 @@ public class PersistentArray<Type> implements AutoCloseable {
         storage.closeFile();
     }
 
+    @PerformanceImpact
     public void
     serialise() {
         try (storage; OutputWriter writer = new OutputWriter(storage.get(), reusableBuffer)) {
@@ -253,13 +280,13 @@ public class PersistentArray<Type> implements AutoCloseable {
     }
 
     private boolean
-    contains(int index) {
-        return indices[index % indices.length] == index;
+    isFree(int index) {
+        return indices[index % indices.length] != index;
     }
 
     private boolean
     reload(int index) {
-        return configuration.read().forceReload() || !contains(index);
+        return configuration.read().forceReload() || isFree(index);
     }
 
     private void
@@ -312,7 +339,7 @@ public class PersistentArray<Type> implements AutoCloseable {
 
     private void
     serialize(OutputWriter writer, int index) throws IOException {
-        if (!contains(index)) return;
+        if (isFree(index)) return;
         writer.write(Serializers.serialize(type, data[index % data.length]));
         notify(subscriber -> subscriber.onSerialized(index));
     }
