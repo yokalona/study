@@ -1,8 +1,8 @@
 package com.yokalona.tree.b.array;
 
-import com.yokalona.array.lazy.FixedObjectLayout;
-import com.yokalona.array.lazy.PersistentArray;
-import com.yokalona.array.lazy.debug.CompactInteger;
+import com.yokalona.array.persitent.io.FixedObjectLayout;
+import com.yokalona.array.persitent.PersistentArray;
+import com.yokalona.array.persitent.debug.CompactInteger;
 import org.openjdk.jmh.annotations.*;
 
 import java.io.IOException;
@@ -10,11 +10,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 
-import static com.yokalona.array.lazy.configuration.Chunked.chunked;
-import static com.yokalona.array.lazy.configuration.ChunkedRead.read;
-import static com.yokalona.array.lazy.configuration.ChunkedWrite.write;
-import static com.yokalona.array.lazy.configuration.Configuration.configure;
-import static com.yokalona.array.lazy.configuration.File.file;
+import static com.yokalona.array.persitent.configuration.Chunked.chunked;
+import static com.yokalona.array.persitent.configuration.ChunkedRead.read;
+import static com.yokalona.array.persitent.configuration.ChunkedWrite.write;
+import static com.yokalona.array.persitent.configuration.Configuration.configure;
+import static com.yokalona.array.persitent.configuration.File.file;
 import static com.yokalona.tree.b.Helper.shuffle;
 
 @State(Scope.Benchmark)

@@ -1,7 +1,6 @@
 package com.yokalona.tree;
 
-import com.yokalona.array.lazy.PersistentArrayTest;
-import com.yokalona.array.lazy.subscriber.CountingSubscriber;
+import com.yokalona.array.persitent.subscriber.CountingSubscriber;
 
 public class TestHelper {
 

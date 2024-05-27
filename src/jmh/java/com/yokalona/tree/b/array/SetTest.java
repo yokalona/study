@@ -1,6 +1,6 @@
 package com.yokalona.tree.b.array;
 
-import com.yokalona.array.lazy.debug.CompactInteger;
+import com.yokalona.array.persitent.debug.CompactInteger;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Mode;
