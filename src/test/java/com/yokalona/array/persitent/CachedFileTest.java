@@ -1,4 +1,4 @@
-package com.yokalona.array.lazy;
+package com.yokalona.array.persitent;
 
 import com.yokalona.array.persitent.io.CachedFile;
 import org.junit.jupiter.api.Test;

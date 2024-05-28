@@ -1,13 +1,8 @@
-package com.yokalona.array.persitent.util;
-
-import com.yokalona.array.persitent.serializers.Serializer;
-import com.yokalona.array.persitent.serializers.SerializerStorage;
-import com.yokalona.array.persitent.serializers.TypeDescriptor;
+package com.yokalona.array.persitent.serializers;
 
 public final class Version implements Comparable<Version> {
 
     public static final TypeDescriptor<Version> descriptor = new TypeDescriptor<>(4, Version.class);
-
     static {
         SerializerStorage.register(descriptor, new VersionSerializer(descriptor));
     }

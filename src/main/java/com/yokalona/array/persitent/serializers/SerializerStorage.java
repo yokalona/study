@@ -3,7 +3,6 @@ package com.yokalona.array.persitent.serializers;
 import java.util.HashMap;
 
 public class SerializerStorage {
-
     private static final HashMap<TypeDescriptor<?>, Serializer<?>> map = new HashMap<>();
     public static final Serializer<Integer> INTEGER;
     public static final Serializer<Boolean> BOOLEAN;

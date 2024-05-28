@@ -6,10 +6,15 @@ import com.yokalona.array.persitent.subscriber.Subscriber;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 import static java.util.Collections.unmodifiableList;
 
-public record Configuration(File file, ChunkedRead read, ChunkedWrite write, Chunked memory, List<Subscriber> subscribers) {
+public record Configuration(File file, Executor executor, ChunkedRead read, ChunkedWrite write, Chunked memory, List<Subscriber> subscribers) {
+
+    private static final ThreadFactory threadFactory = new BaseThreadFactory("yokabase", "notify");
 
     public Configuration {
         if (read.size() > memory.size()) throw new ReadChunkLimitExceededException();
@@ -36,15 +41,18 @@ public record Configuration(File file, ChunkedRead read, ChunkedWrite write, Chu
     public interface ChunkLeft {
         ChunkLeft addSubscriber(Subscriber subscriber);
 
+        ChunkLeft executor(Executor executor);
+
         ReadLeft write(ChunkedWrite write);
 
         WriteLeft read(ChunkedRead read);
     }
 
     public static final class ConfigurationBuilder implements MemoryLeft, ChunkLeft {
-        private final File file;
-        private Chunked memory;
         private final List<Subscriber> subscribers = new ArrayList<>();
+        private Chunked memory;
+        private final File file;
+        private Executor executor = Executors.newSingleThreadExecutor(threadFactory);
 
         public ConfigurationBuilder(File file) {
             this.file = file;
@@ -57,21 +65,28 @@ public record Configuration(File file, ChunkedRead read, ChunkedWrite write, Chu
         }
 
         @Override
-        public ChunkLeft addSubscriber(Subscriber subscriber) {
+        public ChunkLeft
+        addSubscriber(Subscriber subscriber) {
             subscribers.add(subscriber);
+            return this;
+        }
+
+        @Override
+        public ChunkLeft
+        executor(Executor executor) {
+            this.executor = executor;
             return this;
         }
 
         public WriteLeft
         read(ChunkedRead read) {
-            return write -> new Configuration(file, read, write, memory, unmodifiableList(subscribers));
+            return write -> new Configuration(file, executor, read, write, memory, unmodifiableList(subscribers));
         }
 
         public ReadLeft
         write(ChunkedWrite write) {
-            return read -> new Configuration(file, read, write, memory, unmodifiableList(subscribers));
+            return read -> new Configuration(file, executor, read, write, memory, unmodifiableList(subscribers));
         }
-
     }
 
 }

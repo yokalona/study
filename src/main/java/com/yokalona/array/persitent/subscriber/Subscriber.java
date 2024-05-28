@@ -33,11 +33,11 @@ public interface Subscriber {
     }
 
     default void
-    onChunkResized(ChunkType type, int prior, int current) {
+    onChunkResized(ChunkType ignore1, int ignore2, int ignore3) {
     }
 
     default void
-    init(PersistentArray<?> array) {
+    init(PersistentArray<?> ignore) {
     }
 
 }

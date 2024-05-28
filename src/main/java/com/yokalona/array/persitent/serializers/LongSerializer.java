@@ -1,7 +1,6 @@
 package com.yokalona.array.persitent.serializers;
 
 public class LongSerializer implements Serializer<Long> {
-
     public static final Serializer<Long> INSTANCE = new LongSerializer();
 
     private LongSerializer() {}

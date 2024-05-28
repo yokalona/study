@@ -3,7 +3,6 @@ package com.yokalona.array.persitent.subscriber;
 import java.util.Arrays;
 
 public class CountingSubscriber implements Subscriber {
-
     private final long[] counters = new long[Counter.values().length * 2];
 
     @Override
@@ -31,17 +30,20 @@ public class CountingSubscriber implements Subscriber {
     }
 
     @Override
-    public void onChunkSerialized() {
+    public void
+    onChunkSerialized() {
         inc(Counter.CHUNK_SERIALIZATIONS);
     }
 
     @Override
-    public void onChunkDeserialized() {
+    public void
+    onChunkDeserialized() {
         inc(Counter.CHUNK_DESERIALIZATIONS);
     }
 
     @Override
-    public void onFileCreated() {
+    public void
+    onFileCreated() {
         counters[Counter.FILE_CREATED.ordinal()] = System.currentTimeMillis();
     }
 

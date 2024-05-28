@@ -19,7 +19,7 @@ import com.yokalona.array.persitent.serializers.Serializers;
 import com.yokalona.array.persitent.serializers.TypeDescriptor;
 import com.yokalona.array.persitent.subscriber.ChunkType;
 import com.yokalona.array.persitent.subscriber.Subscriber;
-import com.yokalona.array.persitent.util.Version;
+import com.yokalona.array.persitent.serializers.Version;
 
 import java.io.BufferedInputStream;
 import java.io.FileInputStream;
@@ -195,8 +195,14 @@ public class PersistentArray<Type> implements AutoCloseable {
     @PerformanceImpact
     public final void
     insert(int index, Type value) {
-        for (int offset = length - 1; offset > index; offset --) set(offset, get(offset - 1));
+        for (int offset = length - 1; offset > index; offset--) set(offset, get(offset - 1));
         set(index, value);
+    }
+
+    @PerformanceImpact
+    public final void
+    copyTo(int position, PersistentArray<Type> array, int destination, int length) {
+        for (int offset = position; offset < position + length; offset++) array.set(destination++, get(offset));
     }
 
     public final void
@@ -291,7 +297,8 @@ public class PersistentArray<Type> implements AutoCloseable {
 
     private void
     notify(Consumer<Subscriber> notification) {
-        configuration.subscribers().forEach(notification);
+        configuration.executor().execute(() ->
+                configuration.subscribers().forEach(notification));
     }
 
     private void
@@ -364,14 +371,19 @@ public class PersistentArray<Type> implements AutoCloseable {
                     dataLayout.seek(offset, raf);
                 }
                 shouldSeek = false;
-                reader.read(datum);
-                associate(offset, Serializers.deserialize(type, datum));
-                for (Subscriber subscriber : configuration.subscribers()) subscriber.onDeserialized(offset);
+                deserialize(reader, datum, offset);
             }
             if (size > 1) notify(Subscriber::onChunkDeserialized);
         } catch (IOException e) {
             throw new DeserializationException("during " + index + " deserialization", e);
         }
+    }
+
+    private void
+    deserialize(InputReader reader, byte[] datum, int index) throws IOException {
+        reader.read(datum);
+        associate(index, Serializers.deserialize(type, datum));
+        notify(subscriber -> subscriber.onDeserialized(index));
     }
 
     @Override

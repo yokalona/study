@@ -6,11 +6,6 @@ public record ChunkedRead(int size, boolean breakOnLoaded, boolean forceReload) 
         assert size > 0;
     }
 
-    public boolean
-    chunked() {
-        return size > 1;
-    }
-
     public static ChunkedReadBuilder
     read() {
         return new ChunkedReadBuilder();

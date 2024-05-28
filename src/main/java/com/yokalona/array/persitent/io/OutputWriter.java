@@ -1,9 +1,9 @@
 package com.yokalona.array.persitent.io;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.RandomAccessFile;
 
 public class OutputWriter implements AutoCloseable {
-
     private final RandomAccessFile raf;
     private final byte[] buffer;
     private int position;

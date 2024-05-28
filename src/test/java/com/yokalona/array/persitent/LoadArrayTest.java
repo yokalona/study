@@ -10,7 +10,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,7 +27,6 @@ import static org.junit.jupiter.api.Assertions.*;
 class LoadArrayTest {
 
     private Path path;
-    private int repeats = 8;
 
     @BeforeEach
     public void
@@ -39,14 +37,18 @@ class LoadArrayTest {
     @AfterEach
     public void
     tearDown() throws IOException {
-        Files.list(path).map(Path::toFile).forEach(File::delete);
+        try (var folder = Files.list(path)) {
+            folder.map(Path::toFile).forEach(file -> {
+                boolean ignore = file.delete();
+            });
+        }
     }
 
     @Test
     public void
     testMemoryConsumption() throws IOException {
         CountingSubscriber statist = new CountingSubscriber();
-        int length = Power.two(20);
+        int length = Power.two(17);
         Configuration configuration = configure(
                 file(path.resolve(UUID.randomUUID() + ".la"))
                         .mode(RW)
@@ -62,18 +64,19 @@ class LoadArrayTest {
                 configuration.write().size(),
                 configuration.file().buffer(),
                 CompactInteger.descriptor.size()));
+        int repeats = 8;
         for (int i = 0; i < repeats; i++) {
             printHeader(i + 1, repeats);
             writeLinear += printStatistic("Linear write", writeLinear(length, configuration, statist), statist);
-            readLinear += printStatistic("Linear read", readLinear(length, configuration, false), statist);
+            readLinear += printStatistic("Linear read", readLinear(length, configuration), statist);
             writeRandom += printStatistic("Random write", writeRandom(length, configuration, statist), statist);
-            readRandom += printStatistic("Random read", readRandom(length, configuration, true), statist);
+            readRandom += printStatistic("Random read", readRandom(length, configuration), statist);
         }
         printHeader();
-        printAverage("linear write", (float) writeLinear / 1, "ms");
-        printAverage("linear read", (float) readLinear / 1, "ms");
-        printAverage("random write", (float) writeRandom / 1, "ms");
-        printAverage("random read", (float) readRandom / 1, "ms");
+        printAverage("linear write", (float) writeLinear / repeats, "ms");
+        printAverage("linear read", (float) readLinear / repeats, "ms");
+        printAverage("random write", (float) writeRandom / repeats, "ms");
+        printAverage("random read", (float) readRandom / repeats, "ms");
         printAverage("read collisions", statist.average(CountingSubscriber.Counter.CACHE_MISS, 1), "ops");
         printAverage("write collisions", statist.average(CountingSubscriber.Counter.WRITE_COLLISIONS, 1), "ops");
         printStatistic("File size", getSize(Files.size(configuration.file().path())));
@@ -81,15 +84,13 @@ class LoadArrayTest {
     }
 
     private static long
-    readLinear(int length, Configuration configuration, boolean validate) {
+    readLinear(int length, Configuration configuration) {
         try (var array = PersistentArray.deserialize(CompactInteger.descriptor, configuration)) {
             long start = System.currentTimeMillis();
             for (int index = 0; index < length; index++) {
                 CompactInteger value = array.get(index);
-                if (validate) {
-                    assertNotNull(value);
-                    assertEquals(index, value.value());
-                }
+                assertNotNull(value);
+                assertEquals(index, value.value());
                 printProgress(length, index);
             }
             System.err.print("\r");
@@ -99,7 +100,7 @@ class LoadArrayTest {
     }
 
     private static long
-    readRandom(int length, Configuration configuration, boolean validate) {
+    readRandom(int length, Configuration configuration) {
         int[] indices = new int[length];
         for (int index = 0; index < length; index++) {
             indices[index] = index;
@@ -110,10 +111,8 @@ class LoadArrayTest {
             int ops = 0;
             for (int index : indices) {
                 CompactInteger value = array.get(index);
-                if (validate) {
-                    assertNotNull(value);
-                    assertEquals(index, value.value());
-                }
+                assertNotNull(value);
+                assertEquals(index, value.value());
                 printProgress(length, ++ops);
             }
             System.err.print("\r");

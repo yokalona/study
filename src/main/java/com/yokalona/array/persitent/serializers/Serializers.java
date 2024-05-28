@@ -1,7 +1,6 @@
 package com.yokalona.array.persitent.serializers;
 
 public class Serializers {
-
     public static byte[]
     serialize(int value) {
         return SerializerStorage.INTEGER.serialize(value);

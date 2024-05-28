@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 
 public class InputReader {
-
     private final byte[] buffer;
     private final RandomAccessFile raf;
     private int pointer = 0;
